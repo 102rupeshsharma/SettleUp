@@ -15,8 +15,29 @@ import Analytics from './pages/Analytics';
 import { SocketProvider } from './context/SocketContext';
 import Toast from './components/notifications/Toast';
 import { ArrowRight, Share2, Shield, RefreshCw } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
 
 const Home = () => {
+  const { user, loading } = useAuth();
+
+  // Wait for the silent refresh check to complete before deciding what to show
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+          <span className="text-slate-500 dark:text-slate-400 text-sm font-medium tracking-wide animate-pulse">
+            Verifying session...
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="bg-transparent text-slate-800 dark:text-white min-h-[calc(100vh-4rem)] flex flex-col justify-center px-4 py-16 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto text-center space-y-8">
@@ -30,7 +51,7 @@ const Home = () => {
           </span>
         </h1>
         <p className="max-w-2xl mx-auto text-base sm:text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
-          SettleUp uses an advanced debt-simplification graph algorithm to minimize transactions, 
+          SettleUp uses an advanced debt-simplification graph algorithm to minimize transactions,
           supports custom group roles, and syncs split balances in real time.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">

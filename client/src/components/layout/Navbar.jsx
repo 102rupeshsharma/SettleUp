@@ -13,10 +13,6 @@ const Navbar = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center">
-            {/* <Link to="/" className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-emerald-500 dark:text-emerald-400">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 ring-1 ring-emerald-500/30">$</span>
-              <span>Settle<span className="text-slate-850 dark:text-white">Up</span></span>
-            </Link> */}
             {user ? (
               <Link to="/dashboard" className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-emerald-500 dark:text-emerald-400">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 ring-1 ring-emerald-500/30">$</span>
