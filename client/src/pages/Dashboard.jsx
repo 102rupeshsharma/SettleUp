@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosInstance';
 import CreateGroupModal from '../components/groups/CreateGroupModal';
-import { User, Mail, DollarSign, Edit3, Save, CheckCircle, AlertCircle, Loader2, Users, Plus, Hash } from 'lucide-react';
+import { User, Mail, Edit3, Save, CheckCircle, AlertCircle, Loader2, Users, Plus, Hash } from 'lucide-react';
+import { useCurrency } from '../hooks/useCurrency';
 
 const Dashboard = () => {
   const { user, updateProfile } = useAuth();
+  const { formatCurrency, currencySymbol } = useCurrency();
   
   const [name, setName] = useState(user?.name || '');
   const [currency, setCurrency] = useState(user?.defaultCurrency || 'INR');
@@ -121,11 +123,11 @@ const Dashboard = () => {
             <div className="space-y-1">
               <span className="text-xs text-slate-500 uppercase font-bold tracking-wider">Total You Owe</span>
               <div className="text-2xl font-extrabold text-rose-500 dark:text-rose-400">
-                ${overview.totalOwing.toFixed(2)}
+                {formatCurrency(overview.totalOwing)}
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20">
-              <DollarSign className="h-6 w-6" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20 font-extrabold text-lg">
+              {currencySymbol}
             </div>
           </div>
 
@@ -133,11 +135,11 @@ const Dashboard = () => {
             <div className="space-y-1">
               <span className="text-xs text-slate-500 uppercase font-bold tracking-wider">Total You Are Owed</span>
               <div className="text-2xl font-extrabold text-emerald-500 dark:text-emerald-400">
-                ${overview.totalOwed.toFixed(2)}
+                {formatCurrency(overview.totalOwed)}
               </div>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20">
-              <DollarSign className="h-6 w-6" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 font-extrabold text-lg">
+              {currencySymbol}
             </div>
           </div>
 
@@ -345,8 +347,8 @@ const Dashboard = () => {
               </div>
 
               <div className="flex items-center gap-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 p-4 border border-slate-100 dark:border-slate-900">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400">
-                  <DollarSign className="h-5 w-5" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 font-extrabold text-sm">
+                  {currencySymbol}
                 </div>
                 <div>
                   <span className="block text-xs text-slate-500 uppercase tracking-wider font-semibold">

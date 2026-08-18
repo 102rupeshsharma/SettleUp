@@ -1,7 +1,10 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, CheckCircle, User } from 'lucide-react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const BalanceSummary = ({ balances }) => {
+  const { formatCurrency } = useCurrency();
+
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -39,12 +42,12 @@ const BalanceSummary = ({ balances }) => {
                 {isCreditor ? (
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
                     <TrendingUp className="h-4 w-4 shrink-0" />
-                    Owed ${b.net.toFixed(2)}
+                    Owed {formatCurrency(b.net)}
                   </div>
                 ) : isDebtor ? (
                   <div className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400 font-bold text-sm">
                     <TrendingDown className="h-4 w-4 shrink-0" />
-                    Owes ${Math.abs(b.net).toFixed(2)}
+                    Owes {formatCurrency(Math.abs(b.net))}
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-semibold text-sm">

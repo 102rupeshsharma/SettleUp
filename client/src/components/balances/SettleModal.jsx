@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../api/axiosInstance';
 import { X, Loader2, CreditCard } from 'lucide-react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const SettleModal = ({ isOpen, onClose, suggestion, groupId, onSuccess }) => {
+  const { formatCurrency } = useCurrency();
   const [method, setMethod] = useState('cash');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,7 +66,7 @@ const SettleModal = ({ isOpen, onClose, suggestion, groupId, onSuccess }) => {
             <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-900 pt-2.5">
               <span className="text-slate-500 font-medium">Settle Amount</span>
               <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
-                ${suggestion.amount.toFixed(2)}
+                {formatCurrency(suggestion.amount)}
               </span>
             </div>
           </div>

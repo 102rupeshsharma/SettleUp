@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import { X, Info } from 'lucide-react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const Toast = () => {
   const socket = useSocket();
   const { user } = useAuth();
   const [toasts, setToasts] = useState([]);
+  const { formatCurrency } = useCurrency();
 
   const addToast = (message) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -26,7 +28,7 @@ const Toast = () => {
     const handleExpenseAdded = ({ expense }) => {
       const actorId = expense.createdBy?._id || expense.createdBy;
       if (actorId.toString() !== user._id.toString()) {
-        addToast(`New Expense: ${expense.paidBy?.name || 'Someone'} added "${expense.description}" ($${expense.amount})`);
+        addToast(`New Expense: ${expense.paidBy?.name || 'Someone'} added "${expense.description}" (${formatCurrency(expense.amount)})`);
       }
     };
 
@@ -44,7 +46,7 @@ const Toast = () => {
     const handleSettlementMade = ({ settlement }) => {
       const actorId = settlement.fromUser?._id || settlement.fromUser;
       if (actorId.toString() !== user._id.toString()) {
-        addToast(`Settlement Recorded: ${settlement.fromUser?.name || 'Someone'} paid ${settlement.toUser?.name || 'Someone'} ($${settlement.amount})`);
+        addToast(`Settlement Recorded: ${settlement.fromUser?.name || 'Someone'} paid ${settlement.toUser?.name || 'Someone'} (${formatCurrency(settlement.amount)})`);
       }
     };
 

@@ -3,12 +3,17 @@ import Expense from '../models/Expense.js';
 
 export const isGroupMember = async (req, res, next) => {
   try {
-    let groupId = req.params.id || req.body.groupId || req.query.groupId;
+    let groupId = req.body.groupId || req.query.groupId;
 
-    if (!groupId && req.params.id) {
-      const expense = await Expense.findById(req.params.id);
-      if (expense) {
-        groupId = expense.groupId;
+    if (req.params.id) {
+      const isExpenseRoute = req.originalUrl.includes('/expenses/');
+      if (isExpenseRoute) {
+        const expense = await Expense.findById(req.params.id);
+        if (expense) {
+          groupId = expense.groupId;
+        }
+      } else {
+        groupId = req.params.id;
       }
     }
 
@@ -39,12 +44,17 @@ export const isGroupMember = async (req, res, next) => {
 
 export const isGroupAdmin = async (req, res, next) => {
   try {
-    let groupId = req.params.id || req.body.groupId || req.query.groupId;
+    let groupId = req.body.groupId || req.query.groupId;
 
-    if (!groupId && req.params.id) {
-      const expense = await Expense.findById(req.params.id);
-      if (expense) {
-        groupId = expense.groupId;
+    if (req.params.id) {
+      const isExpenseRoute = req.originalUrl.includes('/expenses/');
+      if (isExpenseRoute) {
+        const expense = await Expense.findById(req.params.id);
+        if (expense) {
+          groupId = expense.groupId;
+        }
+      } else {
+        groupId = req.params.id;
       }
     }
 

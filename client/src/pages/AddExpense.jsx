@@ -5,10 +5,12 @@ import SplitEditor from '../components/expenses/SplitEditor';
 import ReceiptUpload from '../components/expenses/ReceiptUpload';
 import Loading from '../components/Loading';
 import { ChevronLeft, Loader2, Save, AlertCircle } from 'lucide-react';
+import { useCurrency } from '../hooks/useCurrency';
 
 const AddExpense = () => {
   const { groupId, expenseId } = useParams();
   const navigate = useNavigate();
+  const { currencySymbol, currencyCode } = useCurrency();
 
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -170,7 +172,7 @@ const AddExpense = () => {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor="expenseAmt" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Total Amount ($)
+                Total Amount ({currencySymbol})
               </label>
               <input
                 id="expenseAmt"

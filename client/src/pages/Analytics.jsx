@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import Loading from '../components/Loading';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { ChevronLeft, Loader2, BarChart2, DollarSign } from 'lucide-react';
+import { ChevronLeft, Loader2, BarChart2 } from 'lucide-react';
+import { useCurrency } from '../hooks/useCurrency';
 
 const COLORS = {
   food: '#fbbf24',
@@ -16,6 +17,8 @@ const COLORS = {
 
 const Analytics = () => {
   const { groupId } = useParams();
+  const navigate = useNavigate();
+  const { formatCurrency, currencySymbol } = useCurrency();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [groupName, setGroupName] = useState('');
@@ -68,10 +71,10 @@ const Analytics = () => {
         </div>
 
         <div className="rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/20 px-4 py-3 flex items-center gap-2 shadow-sm dark:shadow-none">
-          <DollarSign className="h-5 w-5 text-emerald-500 dark:text-emerald-400 shrink-0" />
+          <span className="text-emerald-500 dark:text-emerald-400 font-extrabold text-sm shrink-0 w-5 h-5 flex items-center justify-center">{currencySymbol}</span>
           <div>
             <span className="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">Total Group Spend</span>
-            <span className="text-lg font-extrabold text-slate-900 dark:text-white">${totalSpent.toFixed(2)}</span>
+            <span className="text-lg font-extrabold text-slate-900 dark:text-white">{formatCurrency(totalSpent)}</span>
           </div>
         </div>
       </div>
@@ -105,7 +108,7 @@ const Analytics = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[entry.category] || COLORS.other} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: '#090d16', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: '#090d16', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -123,7 +126,7 @@ const Analytics = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
                   <XAxis dataKey="month" stroke="#64748b" style={{ fontSize: '10px' }} />
                   <YAxis stroke="#64748b" style={{ fontSize: '10px' }} />
-                  <Tooltip formatter={(value) => `$${value}`} contentStyle={{ backgroundColor: '#090d16', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={{ backgroundColor: '#090d16', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} />
                   <Line type="monotone" dataKey="total" stroke="#10b981" strokeWidth={3} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>

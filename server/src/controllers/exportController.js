@@ -2,6 +2,27 @@ import Expense from '../models/Expense.js';
 import Settlement from '../models/Settlement.js';
 import PDFDocument from 'pdfkit';
 
+const getCurrencySymbol = (code) => {
+  switch (code) {
+    case 'INR':
+      return 'Rs. ';
+    case 'USD':
+      return '$';
+    case 'EUR':
+      return '€';
+    case 'GBP':
+      return '£';
+    case 'AUD':
+      return 'A$';
+    case 'CAD':
+      return 'C$';
+    case 'JPY':
+      return '¥';
+    default:
+      return '$';
+  }
+};
+
 export const exportCSV = async (req, res, next) => {
   try {
     const expenses = await Expense.find({ groupId: req.group._id })
@@ -31,6 +52,8 @@ export const exportPDF = async (req, res, next) => {
     const settlements = await Settlement.find({ groupId: group._id })
       .populate('fromUser', 'name')
       .populate('toUser', 'name');
+
+    const symbol = getCurrencySymbol(req.user.defaultCurrency || 'INR');
 
     const nets = {};
     group.members.forEach((m) => {
@@ -71,9 +94,9 @@ export const exportPDF = async (req, res, next) => {
       const net = nets[uId] || 0;
       let balanceStr = 'Fully Settled';
       if (net > 0.01) {
-        balanceStr = `Owed $${net.toFixed(2)}`;
+        balanceStr = `Owed ${symbol}${net.toFixed(2)}`;
       } else if (net < -0.01) {
-        balanceStr = `Owes $${Math.abs(net).toFixed(2)}`;
+        balanceStr = `Owes ${symbol}${Math.abs(net).toFixed(2)}`;
       }
       doc.fontSize(12).text(`${m.userId.name}: ${balanceStr}`);
     });
@@ -86,7 +109,7 @@ export const exportPDF = async (req, res, next) => {
     } else {
       expenses.forEach((e) => {
         doc.fontSize(11).text(
-          `${new Date(e.createdAt).toLocaleDateString()} - ${e.description}: $${e.amount.toFixed(2)} (Paid by ${e.paidBy?.name})`
+          `${new Date(e.createdAt).toLocaleDateString()} - ${e.description}: ${symbol}${e.amount.toFixed(2)} (Paid by ${e.paidBy?.name})`
         );
       });
     }
@@ -99,7 +122,7 @@ export const exportPDF = async (req, res, next) => {
     } else {
       settlements.forEach((s) => {
         doc.fontSize(11).text(
-          `${new Date(s.settledAt).toLocaleDateString()} - ${s.fromUser?.name} paid ${s.toUser?.name} $${s.amount.toFixed(2)} via ${s.method}`
+          `${new Date(s.settledAt).toLocaleDateString()} - ${s.fromUser?.name} paid ${s.toUser?.name} ${symbol}${s.amount.toFixed(2)} via ${s.method}`
         );
       });
     }

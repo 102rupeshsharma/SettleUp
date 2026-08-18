@@ -11,12 +11,14 @@ import SettleModal from '../components/balances/SettleModal';
 import useGroupSocket from '../hooks/useGroupSocket';
 import ExportButtons from '../components/groups/ExportButtons';
 import Loading from '../components/Loading';
-import { Users, CreditCard, Settings, ChevronLeft, UserPlus, Trash2, ShieldAlert, Loader2, RefreshCw, LogOut, Plus, DollarSign, Receipt, BarChart2 } from 'lucide-react';
+import { Users, CreditCard, Settings, ChevronLeft, UserPlus, Trash2, ShieldAlert, Loader2, RefreshCw, LogOut, Plus, Coins, Receipt, BarChart2 } from 'lucide-react';
+import { useCurrency } from '../hooks/useCurrency';
 
 const GroupDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { formatCurrency } = useCurrency();
 
   const [group, setGroup] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -284,7 +286,7 @@ const GroupDetail = () => {
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
             }`}
         >
-          <DollarSign className="h-4 w-4" />
+          <Coins className="h-4 w-4" />
           Balances & Settlements
         </button>
         <button
@@ -371,7 +373,7 @@ const GroupDetail = () => {
                           <span className="capitalize text-slate-500 dark:text-slate-400 font-semibold">{settle.method}</span>
                         </div>
                         <div className="text-right space-y-1">
-                          <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block">${settle.amount.toFixed(2)}</span>
+                          <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block">{formatCurrency(settle.amount)}</span>
                           <span className="text-[10px] text-slate-500 block">
                             {new Date(settle.settledAt).toLocaleDateString()}
                           </span>

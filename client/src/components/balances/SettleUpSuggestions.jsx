@@ -1,7 +1,9 @@
 import React from 'react';
-import { ArrowRight, DollarSign } from 'lucide-react';
+import { ArrowRight, Coins } from 'lucide-react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const SettleUpSuggestions = ({ suggestions, currentUserId, onSettle }) => {
+  const { formatCurrency, currencySymbol } = useCurrency();
   return (
     <div className="space-y-4 animate-in fade-in duration-200">
       <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -30,14 +32,14 @@ const SettleUpSuggestions = ({ suggestions, currentUserId, onSettle }) => {
 
                 <div className="flex items-center gap-4">
                   <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
-                    ${s.amount.toFixed(2)}
+                    {formatCurrency(s.amount)}
                   </span>
                   {isOwer && (
                     <button
                       onClick={() => onSettle(s)}
                       className="flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-emerald-400 active:scale-95 transition-all text-slate-950"
                     >
-                      <DollarSign className="h-3 w-3" />
+                      <span className="text-[10px] font-extrabold mr-0.5">{currencySymbol}</span>
                       Settle Up
                     </button>
                   )}

@@ -1,7 +1,9 @@
 import React from 'react';
 import { Utensils, Plane, Home, Wrench, Film, HelpCircle, Edit, Trash2, Calendar } from 'lucide-react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const ExpenseCard = ({ expense, currentUserId, currentUserRole, onEdit, onDelete }) => {
+  const { formatCurrency } = useCurrency();
   const getCategoryIcon = (cat) => {
     switch (cat) {
       case 'food':
@@ -62,7 +64,7 @@ const ExpenseCard = ({ expense, currentUserId, currentUserRole, onEdit, onDelete
         </div>
         <div className="text-right">
           <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
-            ${expense.amount.toFixed(2)}
+            {formatCurrency(expense.amount)}
           </div>
           <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
             Paid by {expense.paidBy?.name || 'Unknown'}
@@ -74,11 +76,10 @@ const ExpenseCard = ({ expense, currentUserId, currentUserRole, onEdit, onDelete
         <div className="text-slate-500 dark:text-slate-400">
           Your Share:{' '}
           <span className="font-bold text-slate-800 dark:text-slate-200">
-            $
-            {(
+            {formatCurrency(
               expense.splits.find((s) => s.userId === currentUserId || s.userId?._id === currentUserId)
                 ?.amount || 0
-            ).toFixed(2)}
+            )}
           </span>
         </div>
 

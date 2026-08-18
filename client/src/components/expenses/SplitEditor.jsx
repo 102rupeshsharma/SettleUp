@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
+import { useCurrency } from '../../hooks/useCurrency';
 
 const SplitEditor = ({ members, amount, splitType, splits, onChange }) => {
+  const { formatCurrency, currencySymbol } = useCurrency();
   const parsedAmount = parseFloat(amount) || 0;
 
   useEffect(() => {
@@ -80,15 +82,18 @@ const SplitEditor = ({ members, amount, splitType, splits, onChange }) => {
               <span className="text-sm text-slate-300 font-medium">{userObj.name}</span>
               <div className="flex items-center gap-2">
                 {splitType === 'equal' ? (
-                  <input
-                    type="text"
-                    readOnly
-                    value={currentSplit?.amount?.toFixed(2) || '0.00'}
-                    className="w-24 rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-right text-xs text-slate-400 outline-none"
-                  />
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-3 flex items-center text-xs text-slate-500">{currencySymbol}</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={currentSplit?.amount?.toFixed(2) || '0.00'}
+                      className="w-24 rounded-lg border border-slate-800 bg-slate-900 py-1.5 pl-7 pr-3 text-right text-xs text-slate-400 outline-none"
+                    />
+                  </div>
                 ) : splitType === 'exact' ? (
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-3 flex items-center text-xs text-slate-500">$</span>
+                    <span className="absolute inset-y-0 left-3 flex items-center text-xs text-slate-500">{currencySymbol}</span>
                     <input
                       type="number"
                       step="0.01"
@@ -113,7 +118,7 @@ const SplitEditor = ({ members, amount, splitType, splits, onChange }) => {
                     />
                     <span className="text-xs text-slate-500">%</span>
                     <span className="w-16 text-right text-xs text-slate-400">
-                      (${currentSplit?.amount?.toFixed(2) || '0.00'})
+                      ({formatCurrency(currentSplit?.amount || 0)})
                     </span>
                   </div>
                 )}
