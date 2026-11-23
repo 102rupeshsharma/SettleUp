@@ -1,69 +1,205 @@
 import React, { useState } from 'react';
 import ExpenseCard from './ExpenseCard';
-import { Search, Filter } from 'lucide-react';
+import { Search, SlidersHorizontal } from 'lucide-react';
 
-const ExpenseList = ({ expenses, currentUserId, currentUserRole, onEdit, onDelete }) => {
+// When the money was spent; older expenses only have createdAt.
+const spentOn = (exp) => new Date(exp.date || exp.createdAt);
+
+const monthLabel = (dateValue) =>
+  dateValue.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+const idOf = (value) => (value && value._id ? value._id : value);
+
+const ExpenseList = ({ expenses, members = [], currentUserId, currentUserRole, currency, onEdit, onDelete }) => {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [showMore, setShowMore] = useState(false);
+  const [payer, setPayer] = useState('');
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
-  const filteredExpenses = expenses.filter((exp) => {
-    const matchesSearch = exp.description.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = category ? exp.category === category : true;
-    return matchesSearch && matchesCategory;
+  const fromDate = from ? new Date(`${from}T00:00:00`) : null;
+  const toDate = to ? new Date(`${to}T23:59:59.999`) : null;
+
+  const filteredExpenses = expenses
+    .filter((exp) => {
+      const matchesSearch = exp.description.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = category ? exp.category === category : true;
+      const matchesPayer = payer ? idOf(exp.paidBy) === payer : true;
+      const when = spentOn(exp);
+      const matchesFrom = fromDate ? when >= fromDate : true;
+      const matchesTo = toDate ? when <= toDate : true;
+      const involvesMe =
+        idOf(exp.paidBy) === currentUserId ||
+        exp.splits.some((s) => idOf(s.userId) === currentUserId && s.amount > 0);
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesPayer &&
+        matchesFrom &&
+        matchesTo &&
+        (onlyMine ? involvesMe : true)
+      );
+    })
+    .sort((a, b) => spentOn(b) - spentOn(a));
+
+  // Start a new section whenever the month changes.
+  const sections = [];
+  filteredExpenses.forEach((exp) => {
+    const label = monthLabel(spentOn(exp));
+    const last = sections[sections.length - 1];
+    if (last && last.label === label) {
+      last.items.push(exp);
+    } else {
+      sections.push({ label, items: [exp] });
+    }
   });
 
+  const extraFilterCount = [payer, onlyMine, from, to].filter(Boolean).length;
+  const isFiltering = search !== '' || category !== '' || extraFilterCount > 0;
+
+  const clearFilters = () => {
+    setSearch('');
+    setCategory('');
+    setPayer('');
+    setOnlyMine(false);
+    setFrom('');
+    setTo('');
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-grow">
-          <span className="absolute inset-y-0 left-3 flex items-center text-slate-500">
-            <Search className="h-4 w-4" />
-          </span>
-          <input
-            type="text"
-            placeholder="Search expenses by description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2 pl-9 pr-4 text-xs text-slate-850 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-          />
+    <div className="space-y-5">
+      {expenses.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-grow">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-faint" />
+              <input
+                type="text"
+                placeholder="Search expenses"
+                aria-label="Search expenses"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="field pl-9"
+              />
+            </div>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              aria-label="Filter by category"
+              className="field sm:w-44"
+            >
+              <option value="">All categories</option>
+              <option value="food">Food</option>
+              <option value="travel">Travel</option>
+              <option value="rent">Rent</option>
+              <option value="utilities">Utilities</option>
+              <option value="entertainment">Entertainment</option>
+              <option value="other">Other</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              aria-expanded={showMore}
+              className="btn btn-secondary"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filters{extraFilterCount > 0 ? ` (${extraFilterCount})` : ''}
+            </button>
+          </div>
+
+          {showMore && (
+            <div className="grid gap-3 rounded-md border border-line p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label htmlFor="filterPayer" className="mb-1 block text-xs text-muted">Paid by</label>
+                <select
+                  id="filterPayer"
+                  value={payer}
+                  onChange={(e) => setPayer(e.target.value)}
+                  className="field"
+                >
+                  <option value="">Anyone</option>
+                  {members.map((m) =>
+                    m.userId ? (
+                      <option key={m.userId._id} value={m.userId._id}>
+                        {m.userId._id === currentUserId ? 'You' : m.userId.name}
+                      </option>
+                    ) : null
+                  )}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="filterFrom" className="mb-1 block text-xs text-muted">From</label>
+                <input
+                  id="filterFrom"
+                  type="date"
+                  value={from}
+                  max={to || undefined}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className="field"
+                />
+              </div>
+              <div>
+                <label htmlFor="filterTo" className="mb-1 block text-xs text-muted">To</label>
+                <input
+                  id="filterTo"
+                  type="date"
+                  value={to}
+                  min={from || undefined}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="field"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={onlyMine}
+                  onChange={(e) => setOnlyMine(e.target.checked)}
+                  className="h-4 w-4 accent-[var(--accent)]"
+                />
+                Only ones involving me
+              </label>
+            </div>
+          )}
         </div>
-        <div className="relative w-full sm:w-48">
-          <span className="absolute inset-y-0 left-3 flex items-center text-slate-500">
-            <Filter className="h-4 w-4" />
-          </span>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-2 pl-9 pr-4 text-xs text-slate-700 dark:text-slate-300 focus:border-emerald-500 focus:outline-none"
-          >
-            <option value="">All Categories</option>
-            <option value="food">Food</option>
-            <option value="travel">Travel</option>
-            <option value="rent">Rent</option>
-            <option value="utilities">Utilities</option>
-            <option value="entertainment">Entertainment</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-      </div>
+      )}
 
       {filteredExpenses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 text-slate-500 shadow-sm dark:shadow-none">
-          <p className="font-semibold text-sm">No expenses found matching filters.</p>
+        <div className="panel px-4 py-12 text-center">
+          <p className="text-sm font-medium text-ink">
+            {isFiltering ? 'Nothing matches those filters.' : 'No expenses yet.'}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            {isFiltering
+              ? 'Try a different word, category or date range.'
+              : 'Add the first one and the balances will appear here.'}
+          </p>
+          {isFiltering && (
+            <button type="button" onClick={clearFilters} className="btn btn-secondary mt-4">
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredExpenses.map((exp) => (
-            <ExpenseCard
-              key={exp._id}
-              expense={exp}
-              currentUserId={currentUserId}
-              currentUserRole={currentUserRole}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
-        </div>
+        sections.map((section) => (
+          <section key={section.label}>
+            <h4 className="mb-2 text-xs font-medium text-muted">{section.label}</h4>
+            <ul className="panel divide-y divide-line">
+              {section.items.map((exp) => (
+                <ExpenseCard
+                  key={exp._id}
+                  expense={exp}
+                  currentUserId={currentUserId}
+                  currentUserRole={currentUserRole}
+                  currency={currency}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   );

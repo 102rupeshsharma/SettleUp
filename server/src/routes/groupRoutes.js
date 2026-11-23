@@ -14,6 +14,7 @@ import {
   joinGroup,
   changeMemberRole,
   removeMember,
+  listActivity,
 } from '../controllers/groupController.js';
 
 import { validateGroup } from '../middleware/validationMiddleware.js';
@@ -28,6 +29,7 @@ router.get('/groups/:id', isAuthenticated, isGroupMember, getGroupDetail);
 router.put('/groups/:id', isAuthenticated, isGroupAdmin, validateGroup, updateGroup);
 router.delete('/groups/:id', isAuthenticated, isGroupAdmin, deleteGroup);
 router.post('/groups/:id/invite', isAuthenticated, isGroupAdmin, regenerateInviteCode);
+router.get('/groups/:id/activity', isAuthenticated, isGroupMember, listActivity);
 
 router.put('/groups/:id/members/:userId/role', isAuthenticated, isGroupAdmin, changeMemberRole);
 router.delete('/groups/:id/members/:userId', isAuthenticated, isGroupMember, removeMember);

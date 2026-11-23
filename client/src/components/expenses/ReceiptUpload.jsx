@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, File, X, AlertCircle } from 'lucide-react';
+import { Paperclip, X } from 'lucide-react';
 
 const ReceiptUpload = ({ file, setFile }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -55,29 +55,27 @@ const ReceiptUpload = ({ file, setFile }) => {
   };
 
   return (
-    <div className="space-y-2">
-      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
-        Expense Receipt (Optional)
-      </label>
+    <div>
+      <span className="field-label">
+        Receipt <span className="font-normal text-muted">(optional)</span>
+      </span>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 p-2.5 text-xs text-rose-400 border border-rose-500/20">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+        <p role="alert" className="notice-error mb-2">{error}</p>
       )}
 
       {file ? (
-        <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-900/40 text-xs">
-          <div className="flex items-center gap-2 text-slate-300">
-            <File className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span className="truncate max-w-[200px]">{file.name}</span>
-            <span className="text-[10px] text-slate-500">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+        <div className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-sm">
+          <div className="flex min-w-0 items-center gap-2 text-ink">
+            <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+            <span className="truncate">{file.name}</span>
+            <span className="shrink-0 text-xs text-muted">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
           </div>
           <button
             type="button"
             onClick={clearFile}
-            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            aria-label="Remove receipt"
+            className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-sunken hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -88,23 +86,22 @@ const ReceiptUpload = ({ file, setFile }) => {
           onDragOver={handleDrag}
           onDragLeave={handleDrag}
           onDrop={handleDrop}
-          className={`relative flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 ${
-            dragActive
-              ? 'border-emerald-500 bg-emerald-500/5'
-              : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+          className={`relative flex cursor-pointer items-center gap-3 rounded-md border border-dashed px-3 py-3 transition-colors ${
+            dragActive ? 'border-accent bg-accent-soft' : 'border-line hover:bg-sunken'
           }`}
         >
           <input
             type="file"
             accept=".jpg,.jpeg,.png,.pdf"
             onChange={handleChange}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            aria-label="Attach a receipt"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
-          <Upload className="h-6 w-6 text-slate-500 mb-2" />
-          <p className="text-xs text-slate-300 font-semibold">
-            Drag & drop file or <span className="text-emerald-400 underline">browse</span>
+          <Paperclip className="h-4 w-4 shrink-0 text-muted" />
+          <p className="text-sm text-muted">
+            <span className="font-medium text-ink underline underline-offset-2">Choose a file</span> or
+            drop it here. JPG, PNG or PDF, up to 5 MB.
           </p>
-          <p className="text-[10px] text-slate-500 mt-1">JPG, PNG, PDF up to 5MB</p>
         </div>
       )}
     </div>

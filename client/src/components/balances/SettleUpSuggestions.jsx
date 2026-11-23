@@ -1,55 +1,62 @@
 import React from 'react';
-import { ArrowRight, Coins } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 
-const SettleUpSuggestions = ({ suggestions, currentUserId, onSettle }) => {
-  const { formatCurrency, currencySymbol } = useCurrency();
+const SettleUpSuggestions = ({ suggestions, currentUserId, currency, onSettle, onRemind, remindingId }) => {
+  const { formatCurrency } = useCurrency(currency);
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
-      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-        Suggested Payments (Minimized Debts)
-      </h3>
+    <section>
+      <h3 className="font-display text-base font-semibold text-ink">How to settle up</h3>
 
       {suggestions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-8 text-center rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 text-slate-500 shadow-sm dark:shadow-none">
-          <p className="text-sm font-semibold">Everything is fully settled up! No transactions suggested.</p>
-        </div>
+        <p className="panel mt-3 px-4 py-8 text-center text-sm text-muted">
+          Nobody owes anything right now.
+        </p>
       ) : (
-        <div className="space-y-3">
-          {suggestions.map((s, idx) => {
-            const isOwer = s.fromUser._id === currentUserId;
+        <>
+          <ul className="panel mt-3 divide-y divide-line">
+            {suggestions.map((s, idx) => {
+              const isOwer = s.fromUser._id === currentUserId;
+              const isReceiver = s.toUser._id === currentUserId;
 
-            return (
-              <div
-                key={idx}
-                className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/15 hover:border-slate-300 dark:hover:border-slate-800 transition-colors shadow-sm dark:shadow-none"
-              >
-                <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                  <span className="font-bold text-slate-800 dark:text-slate-100">{s.fromUser.name}</span>
-                  <ArrowRight className="h-4 w-4 text-slate-500 shrink-0" />
-                  <span className="font-bold text-slate-800 dark:text-slate-100">{s.toUser.name}</span>
-                </div>
+              return (
+                <li key={idx} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-ink">
+                      <span className="font-medium">{isOwer ? 'You' : s.fromUser.name}</span>
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 text-faint" aria-label="pays" />
+                      <span className="font-medium">{isReceiver ? 'you' : s.toUser.name}</span>
+                    </p>
+                    <p className="mt-0.5 text-sm tabular-nums text-muted">{formatCurrency(s.amount)}</p>
+                  </div>
 
-                <div className="flex items-center gap-4">
-                  <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(s.amount)}
-                  </span>
                   {isOwer && (
-                    <button
-                      onClick={() => onSettle(s)}
-                      className="flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-emerald-400 active:scale-95 transition-all text-slate-950"
-                    >
-                      <span className="text-[10px] font-extrabold mr-0.5">{currencySymbol}</span>
-                      Settle Up
+                    <button onClick={() => onSettle(s)} className="btn btn-primary shrink-0">
+                      Settle up
                     </button>
                   )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+
+                  {isReceiver && onRemind && (
+                    <button
+                      onClick={() => onRemind(s)}
+                      disabled={remindingId === s.fromUser._id}
+                      className="btn btn-secondary shrink-0"
+                    >
+                      {remindingId === s.fromUser._id && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Remind
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-xs text-muted">
+            This is the smallest number of payments that clears every balance.
+          </p>
+        </>
       )}
-    </div>
+    </section>
   );
 };
 

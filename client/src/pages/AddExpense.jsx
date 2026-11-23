@@ -4,15 +4,24 @@ import axiosInstance from '../api/axiosInstance';
 import SplitEditor from '../components/expenses/SplitEditor';
 import ReceiptUpload from '../components/expenses/ReceiptUpload';
 import Loading from '../components/Loading';
-import { ChevronLeft, Loader2, Save, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
+
+// Date -> "YYYY-MM-DD" in the user's own timezone, for <input type="date">.
+const toInputDate = (value) => {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '';
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+};
 
 const AddExpense = () => {
   const { groupId, expenseId } = useParams();
   const navigate = useNavigate();
-  const { currencySymbol, currencyCode } = useCurrency();
 
   const [group, setGroup] = useState(null);
+  const { currencySymbol } = useCurrency(group?.currency);
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +33,7 @@ const AddExpense = () => {
   const [splitType, setSplitType] = useState('equal');
   const [splits, setSplits] = useState([]);
   const [file, setFile] = useState(null);
+  const [date, setDate] = useState(() => toInputDate(new Date()));
 
   const isEdit = !!expenseId;
 
@@ -45,7 +55,8 @@ const AddExpense = () => {
             setCategory(expense.category);
             setPaidBy(expense.paidBy._id || expense.paidBy);
             setSplitType(expense.splitType);
-            setSplits(expense.splits.map((s) => ({ userId: s.userId._id || s.userId, amount: s.amount, percentage: s.percentage || 0 })));
+            setSplits(expense.splits.map((s) => ({ userId: s.userId._id || s.userId, amount: s.amount, percentage: s.percentage || 0, shares: s.shares || 0 })));
+            setDate(toInputDate(expense.date || expense.createdAt));
           }
         }
       } catch (err) {
@@ -84,29 +95,33 @@ const AddExpense = () => {
         setError('Sum of split percentages must equal 100%');
         return;
       }
+    } else if (splitType === 'shares') {
+      const sum = splits.reduce((acc, s) => acc + (s.shares || 0), 0);
+      if (sum <= 0) {
+        setError('Give at least one person a share');
+        return;
+      }
     }
+
+    // Noon local time keeps the chosen calendar day the same in every timezone.
+    const spentOn = date ? new Date(`${date}T12:00:00`) : null;
+    const payload = {
+      description,
+      amount: parsedAmt,
+      category,
+      paidBy,
+      splitType,
+      splits,
+      ...(spentOn && !isNaN(spentOn.getTime()) ? { date: spentOn.toISOString() } : {}),
+    };
 
     setSubmitLoading(true);
     try {
       let expenseRes;
       if (isEdit) {
-        expenseRes = await axiosInstance.put(`/expenses/${expenseId}`, {
-          description,
-          amount: parsedAmt,
-          category,
-          paidBy,
-          splitType,
-          splits,
-        });
+        expenseRes = await axiosInstance.put(`/expenses/${expenseId}`, payload);
       } else {
-        expenseRes = await axiosInstance.post(`/groups/${groupId}/expenses`, {
-          description,
-          amount: parsedAmt,
-          category,
-          paidBy,
-          splitType,
-          splits,
-        });
+        expenseRes = await axiosInstance.post(`/groups/${groupId}/expenses`, payload);
       }
 
       if (file) {
@@ -133,67 +148,64 @@ const AddExpense = () => {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 bg-transparent text-slate-800 dark:text-white space-y-6">
+    <div className="mx-auto max-w-xl px-4 py-8 sm:px-6">
       <Link
         to={`/groups/${groupId}`}
-        className="inline-flex items-center gap-1 text-sm font-semibold text-slate-555 dark:text-slate-400 hover:text-slate-850 dark:hover:text-white transition-colors"
+        className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-ink"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to Group
+        {group?.name || 'Back to group'}
       </Link>
 
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/30 p-6 shadow-xl dark:shadow-none backdrop-blur-sm space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          {isEdit ? 'Edit Expense' : 'Add Expense'}
-        </h1>
+      <h1 className="mt-3 font-display text-2xl font-semibold tracking-tight text-ink">
+        {isEdit ? 'Edit expense' : 'Add an expense'}
+      </h1>
 
-        {error && (
-          <div className="flex items-center gap-2.5 rounded-lg bg-rose-500/10 p-4 text-sm text-rose-500 dark:text-rose-400 ring-1 ring-rose-500/20">
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <p className="font-medium">{error}</p>
-          </div>
-        )}
+      {error && (
+        <p role="alert" className="notice-error mt-5">{error}</p>
+      )}
 
-        <form onSubmit={handleFormSubmit} className="space-y-4">
+      {group && (
+        <form onSubmit={handleFormSubmit} className="mt-6 space-y-5">
           <div>
-            <label htmlFor="expenseDesc" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Description
-            </label>
+            <label htmlFor="expenseDesc" className="field-label">What was it for?</label>
             <input
               id="expenseDesc"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
-              placeholder="e.g. Dinner at Italian Bistro"
+              className="field"
+              placeholder="Groceries, cab to the airport, electricity bill"
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="expenseAmt" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Total Amount ({currencySymbol})
-              </label>
-              <input
-                id="expenseAmt"
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
-                placeholder="0.00"
-              />
+              <label htmlFor="expenseAmt" className="field-label">Amount</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">
+                  {currencySymbol}
+                </span>
+                <input
+                  id="expenseAmt"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="field pl-9 tabular-nums"
+                  placeholder="0.00"
+                />
+              </div>
             </div>
             <div>
-              <label htmlFor="expenseCat" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Category
-              </label>
+              <label htmlFor="expenseCat" className="field-label">Category</label>
               <select
                 id="expenseCat"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
+                className="field"
               >
                 <option value="other">Other</option>
                 <option value="food">Food</option>
@@ -207,14 +219,12 @@ const AddExpense = () => {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="expensePaidBy" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Paid By
-              </label>
+              <label htmlFor="expensePaidBy" className="field-label">Paid by</label>
               <select
                 id="expensePaidBy"
                 value={paidBy}
                 onChange={(e) => setPaidBy(e.target.value)}
-                className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
+                className="field"
               >
                 {group.members.map((m) => (
                   <option key={m.userId._id} value={m.userId._id}>
@@ -224,51 +234,63 @@ const AddExpense = () => {
               </select>
             </div>
             <div>
-              <label htmlFor="expenseSplit" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Split Type
-              </label>
+              <label htmlFor="expenseSplit" className="field-label">Split</label>
               <select
                 id="expenseSplit"
                 value={splitType}
                 onChange={(e) => setSplitType(e.target.value)}
-                className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
+                className="field"
               >
-                <option value="equal">Split Equally</option>
-                <option value="exact">Split by Exact Amounts</option>
-                <option value="percentage">Split by Percentages</option>
+                <option value="equal">Equally</option>
+                <option value="exact">By exact amounts</option>
+                <option value="percentage">By percentage</option>
+                <option value="shares">By shares</option>
               </select>
             </div>
           </div>
 
-          <ReceiptUpload file={file} setFile={setFile} />
+          <div className="sm:max-w-[calc(50%-0.5rem)]">
+            <label htmlFor="expenseDate" className="field-label">Date</label>
+            <input
+              id="expenseDate"
+              type="date"
+              value={date}
+              max={toInputDate(new Date())}
+              onChange={(e) => setDate(e.target.value)}
+              className="field"
+            />
+          </div>
 
           <SplitEditor
             members={group.members}
             amount={amount}
             splitType={splitType}
             splits={splits}
+            currency={group.currency}
             onChange={setSplits}
           />
 
-          <button
-            type="submit"
-            disabled={submitLoading}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-50 transition-colors"
-          >
-            {submitLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                {isEdit ? 'Save Changes' : 'Add Expense'}
-              </>
-            )}
-          </button>
+          <ReceiptUpload file={file} setFile={setFile} />
+
+          <div className="flex justify-end gap-2 border-t border-line pt-5">
+            <Link to={`/groups/${groupId}`} className="btn btn-secondary">
+              Cancel
+            </Link>
+            <button type="submit" disabled={submitLoading} className="btn btn-primary">
+              {submitLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : isEdit ? (
+                'Save changes'
+              ) : (
+                'Add expense'
+              )}
+            </button>
+          </div>
         </form>
-      </div>
+      )}
     </div>
   );
 };

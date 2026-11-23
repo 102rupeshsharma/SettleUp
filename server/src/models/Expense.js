@@ -30,7 +30,7 @@ const expenseSchema = new mongoose.Schema(
     },
     splitType: {
       type: String,
-      enum: ['equal', 'exact', 'percentage'],
+      enum: ['equal', 'exact', 'percentage', 'shares'],
       required: true,
     },
     splits: [
@@ -44,8 +44,17 @@ const expenseSchema = new mongoose.Schema(
           type: Number,
           required: true,
         },
+        // Kept so a percentage or shares split can be edited later.
+        percentage: Number,
+        shares: Number,
       },
     ],
+    // When the money was spent. Older expenses have no value here and fall
+    // back to createdAt wherever a date is shown or sorted on.
+    date: {
+      type: Date,
+      default: Date.now,
+    },
     receiptUrl: {
       type: String,
       default: '',

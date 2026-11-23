@@ -5,6 +5,8 @@ import {
   emitExpenseUpdated,
   emitExpenseDeleted,
 } from '../sockets/socketEvents.js';
+import { logActivity } from '../services/activityLog.js';
+import { formatMoney } from '../utils/formatMoney.js';
 
 const notifyGroup = async (group, type, message, excludeUserId) => {
   try {
@@ -24,50 +26,117 @@ const notifyGroup = async (group, type, message, excludeUserId) => {
   }
 };
 
+const round2 = (value) => parseFloat(Number(value).toFixed(2));
+
+const idOf = (userId) => (userId && userId._id ? userId._id : userId);
+
+/*
+ * Turns what the client sent into the splits stored on the expense.
+ *
+ * - equal:      shared equally between the people listed in `splits`, or
+ *               between every member when no list is given.
+ * - percentage: each listed person's percentage of the total.
+ * - shares:     proportional to each listed person's share count (2:1:1).
+ * - exact:      the amounts as given.
+ *
+ * People with a zero percentage, share or amount are left out. In every
+ * computed mode the last person absorbs the rounding remainder so the parts
+ * always add up to the total.
+ */
+const buildSplits = (group, amount, splitType, splits) => {
+  const given = Array.isArray(splits) ? splits : [];
+
+  if (splitType === 'equal') {
+    const seen = new Set();
+    let participantIds = [];
+    given.forEach((s) => {
+      const id = idOf(s.userId);
+      if (id && !seen.has(id.toString())) {
+        seen.add(id.toString());
+        participantIds.push(id);
+      }
+    });
+    if (participantIds.length === 0) {
+      participantIds = group.members.map((m) => m.userId);
+    }
+
+    const count = participantIds.length;
+    const equalAmount = round2(amount / count);
+    let sum = 0;
+
+    return participantIds.map((userId, idx) => {
+      let userAmount = equalAmount;
+      if (idx === count - 1) {
+        userAmount = round2(amount - sum);
+      }
+      sum += userAmount;
+      return { userId, amount: userAmount };
+    });
+  }
+
+  if (splitType === 'percentage') {
+    const parts = given.filter((s) => Number(s.percentage) > 0);
+    const count = parts.length;
+    let sum = 0;
+
+    return parts.map((s, idx) => {
+      const percentage = Number(s.percentage);
+      let userAmount = round2(amount * (percentage / 100));
+      if (idx === count - 1) {
+        userAmount = round2(amount - sum);
+      }
+      sum += userAmount;
+      return { userId: idOf(s.userId), amount: userAmount, percentage };
+    });
+  }
+
+  if (splitType === 'shares') {
+    const parts = given.filter((s) => Number(s.shares) > 0);
+    const totalShares = parts.reduce((acc, s) => acc + Number(s.shares), 0);
+    const count = parts.length;
+    let sum = 0;
+
+    return parts.map((s, idx) => {
+      const shares = Number(s.shares);
+      let userAmount = round2((amount * shares) / totalShares);
+      if (idx === count - 1) {
+        userAmount = round2(amount - sum);
+      }
+      sum += userAmount;
+      return { userId: idOf(s.userId), amount: userAmount, shares };
+    });
+  }
+
+  return given
+    .filter((s) => Number(s.amount) > 0)
+    .map((s) => ({
+      userId: idOf(s.userId),
+      amount: round2(s.amount),
+    }));
+};
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const spentOn = (expense) => expense.date || expense.createdAt;
+
 export const createExpense = async (req, res, next) => {
   try {
     if (req.memberRole === 'viewer') {
       return res.status(403).json({ message: 'Access denied: viewers cannot add expenses' });
     }
 
-    const { description, amount, category, paidBy, splitType, splits, receiptUrl } = req.body;
+    const { description, amount, category, paidBy, splitType, splits, receiptUrl, date } = req.body;
     if (!description || !amount || !paidBy || !splitType) {
       return res.status(400).json({ message: 'Required fields missing' });
     }
 
-    let finalSplits = [];
-
-    if (splitType === 'equal') {
-      const members = req.group.members;
-      const count = members.length;
-      const equalAmount = parseFloat((amount / count).toFixed(2));
-      let sum = 0;
-
-      finalSplits = members.map((m, idx) => {
-        let userAmount = equalAmount;
-        if (idx === count - 1) {
-          userAmount = parseFloat((amount - sum).toFixed(2));
-        }
-        sum += userAmount;
-        return { userId: m.userId, amount: userAmount };
-      });
-    } else if (splitType === 'percentage') {
-      const count = splits.length;
-      let sum = 0;
-
-      finalSplits = splits.map((s, idx) => {
-        let userAmount = parseFloat((amount * (s.percentage / 100)).toFixed(2));
-        if (idx === count - 1) {
-          userAmount = parseFloat((amount - sum).toFixed(2));
-        }
-        sum += userAmount;
-        return { userId: s.userId, amount: userAmount };
-      });
-    } else {
-      finalSplits = splits.map((s) => ({
-        userId: s.userId,
-        amount: parseFloat(s.amount.toFixed(2)),
-      }));
+    const finalSplits = buildSplits(req.group, amount, splitType, splits);
+    if (finalSplits.length === 0) {
+      return res.status(400).json({ message: 'Choose at least one person to split this expense with' });
     }
 
     const expense = await Expense.create({
@@ -79,6 +148,7 @@ export const createExpense = async (req, res, next) => {
       splitType,
       splits: finalSplits,
       receiptUrl,
+      date: parseDate(date) || new Date(),
       createdBy: req.user._id,
     });
 
@@ -87,14 +157,18 @@ export const createExpense = async (req, res, next) => {
       { path: 'createdBy', select: 'name email avatar' },
     ]);
 
+    const money = formatMoney(amount, req.group.currency);
+
     await notifyGroup(
       req.group,
       'expense_added',
-      `${req.user.name} added "${description}" of ${req.group.name}`,
+      `${req.user.name} added "${description}" (${money}) in ${req.group.name}`,
       req.user._id
     );
 
-    emitExpenseAdded(req.group._id, populatedExpense);
+    await logActivity(req.group._id, req.user._id, 'expense_added', `added "${description}" (${money})`);
+
+    emitExpenseAdded(req.group._id, populatedExpense, req.group.currency);
 
     res.status(201).json(populatedExpense);
   } catch (error) {
@@ -126,6 +200,10 @@ export const listExpenses = async (req, res, next) => {
       .populate('createdBy', 'name email avatar')
       .sort({ createdAt: -1 });
 
+    // Newest spend first. Sorted here rather than in the query because older
+    // expenses have no `date` and must fall back to createdAt.
+    expenses.sort((a, b) => new Date(spentOn(b)) - new Date(spentOn(a)));
+
     res.status(200).json(expenses);
   } catch (error) {
     next(error);
@@ -152,53 +230,30 @@ export const updateExpense = async (req, res, next) => {
       return res.status(403).json({ message: 'Access denied: only the creator or group admins can edit this expense' });
     }
 
-    const { description, amount, category, paidBy, splitType, splits, receiptUrl } = req.body;
+    const { description, amount, category, paidBy, splitType, splits, receiptUrl, date } = req.body;
+    const previousAmount = expense.amount;
 
     if (description !== undefined) expense.description = description;
     if (category !== undefined) expense.category = category;
     if (paidBy !== undefined) expense.paidBy = paidBy;
     if (receiptUrl !== undefined) expense.receiptUrl = receiptUrl;
 
+    const parsedDate = parseDate(date);
+    if (parsedDate) expense.date = parsedDate;
+
     if (amount !== undefined || splitType !== undefined || splits !== undefined) {
       const finalAmount = amount !== undefined ? amount : expense.amount;
       const finalSplitType = splitType !== undefined ? splitType : expense.splitType;
       const rawSplits = splits !== undefined ? splits : expense.splits;
 
+      const finalSplits = buildSplits(req.group, finalAmount, finalSplitType, rawSplits);
+      if (finalSplits.length === 0) {
+        return res.status(400).json({ message: 'Choose at least one person to split this expense with' });
+      }
+
       expense.amount = finalAmount;
       expense.splitType = finalSplitType;
-
-      if (finalSplitType === 'equal') {
-        const members = req.group.members;
-        const count = members.length;
-        const equalAmount = parseFloat((finalAmount / count).toFixed(2));
-        let sum = 0;
-
-        expense.splits = members.map((m, idx) => {
-          let userAmount = equalAmount;
-          if (idx === count - 1) {
-            userAmount = parseFloat((finalAmount - sum).toFixed(2));
-          }
-          sum += userAmount;
-          return { userId: m.userId, amount: userAmount };
-        });
-      } else if (finalSplitType === 'percentage') {
-        const count = rawSplits.length;
-        let sum = 0;
-
-        expense.splits = rawSplits.map((s, idx) => {
-          let userAmount = parseFloat((finalAmount * (s.percentage / 100)).toFixed(2));
-          if (idx === count - 1) {
-            userAmount = parseFloat((finalAmount - sum).toFixed(2));
-          }
-          sum += userAmount;
-          return { userId: s.userId, amount: userAmount };
-        });
-      } else {
-        expense.splits = rawSplits.map((s) => ({
-          userId: s.userId,
-          amount: parseFloat(s.amount.toFixed(2)),
-        }));
-      }
+      expense.splits = finalSplits;
     }
 
     const updatedExpense = await expense.save();
@@ -210,11 +265,21 @@ export const updateExpense = async (req, res, next) => {
     await notifyGroup(
       req.group,
       'expense_added',
-      `${req.user.name} updated expense "${populatedExpense.description}" of ${req.group.name}`,
+      `${req.user.name} updated expense "${populatedExpense.description}" in ${req.group.name}`,
       req.user._id
     );
 
-    emitExpenseUpdated(req.group._id, populatedExpense);
+    const amountChanged = Math.abs(previousAmount - populatedExpense.amount) > 0.005;
+    await logActivity(
+      req.group._id,
+      req.user._id,
+      'expense_updated',
+      amountChanged
+        ? `changed "${populatedExpense.description}" from ${formatMoney(previousAmount, req.group.currency)} to ${formatMoney(populatedExpense.amount, req.group.currency)}`
+        : `edited "${populatedExpense.description}"`
+    );
+
+    emitExpenseUpdated(req.group._id, populatedExpense, req.group.currency);
 
     res.status(200).json(populatedExpense);
   } catch (error) {
@@ -247,8 +312,15 @@ export const deleteExpense = async (req, res, next) => {
     await notifyGroup(
       req.group,
       'expense_added',
-      `${req.user.name} deleted expense "${expense.description}" of ${req.group.name}`,
+      `${req.user.name} deleted expense "${expense.description}" in ${req.group.name}`,
       req.user._id
+    );
+
+    await logActivity(
+      req.group._id,
+      req.user._id,
+      'expense_deleted',
+      `deleted "${expense.description}" (${formatMoney(expense.amount, req.group.currency)})`
     );
 
     emitExpenseDeleted(req.group._id, id);

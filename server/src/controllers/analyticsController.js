@@ -37,7 +37,9 @@ export const getMonthlyTrend = async (req, res, next) => {
       {
         $group: {
           _id: {
-            $dateToString: { format: '%Y-%m', date: '$createdAt' },
+            // Group by when the money was spent; older expenses without a
+            // date fall back to when they were entered.
+            $dateToString: { format: '%Y-%m', date: { $ifNull: ['$date', '$createdAt'] } },
           },
           total: { $sum: '$amount' },
         },
@@ -145,10 +147,40 @@ export const getUserOverview = async (req, res, next) => {
       }
     });
 
+    // Groups can use different currencies, so also report each group's balance
+    // and a per-currency total. The combined totals above are kept for
+    // existing callers.
+    const currencyByGroup = {};
+    userGroups.forEach((g) => {
+      currencyByGroup[g._id.toString()] = g.currency || 'INR';
+    });
+
+    const totalsByCurrency = {};
+    const groups = Object.entries(groupBalances).map(([groupId, net]) => {
+      const currency = currencyByGroup[groupId];
+      if (!totalsByCurrency[currency]) {
+        totalsByCurrency[currency] = { currency, owed: 0, owing: 0 };
+      }
+      if (net > 0.01) {
+        totalsByCurrency[currency].owed += net;
+      } else if (net < -0.01) {
+        totalsByCurrency[currency].owing += Math.abs(net);
+      }
+      return { groupId, currency, net: parseFloat(net.toFixed(2)) };
+    });
+
+    const totals = Object.values(totalsByCurrency).map((t) => ({
+      currency: t.currency,
+      owed: parseFloat(t.owed.toFixed(2)),
+      owing: parseFloat(t.owing.toFixed(2)),
+    }));
+
     res.status(200).json({
       totalOwed: parseFloat(totalOwed.toFixed(2)),
       totalOwing: parseFloat(totalOwing.toFixed(2)),
       groupCount: groupIds.length,
+      totals,
+      groups,
     });
   } catch (error) {
     next(error);

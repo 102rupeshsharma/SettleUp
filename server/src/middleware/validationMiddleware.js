@@ -10,7 +10,7 @@ export const handleValidationErrors = (req, res, next) => {
 
 export const validateSignup = [
   body('email').isEmail().withMessage('Provide a valid email address').normalizeEmail(),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters long'),
   body('name').trim().notEmpty().withMessage('Name is required'),
   handleValidationErrors,
 ];
@@ -30,7 +30,8 @@ export const validateExpense = [
   body('description').trim().notEmpty().withMessage('Description is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be at least 0.01'),
   body('paidBy').isMongoId().withMessage('Provide a valid payer user ID'),
-  body('splitType').isIn(['equal', 'exact', 'percentage']).withMessage('Invalid split type'),
+  body('splitType').isIn(['equal', 'exact', 'percentage', 'shares']).withMessage('Invalid split type'),
+  body('date').optional({ values: 'falsy' }).isISO8601().withMessage('Provide a valid date'),
   body('splits').isArray({ min: 1 }).withMessage('Provide at least one split details'),
   handleValidationErrors,
 ];

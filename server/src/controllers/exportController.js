@@ -35,7 +35,7 @@ export const exportCSV = async (req, res, next) => {
     let csvContent = 'Description,Amount,Category,Paid By,Email,Date\n';
     expenses.forEach((e) => {
       const desc = `"${e.description.replace(/"/g, '""')}"`;
-      const date = new Date(e.createdAt).toLocaleDateString();
+      const date = new Date(e.date || e.createdAt).toLocaleDateString();
       csvContent += `${desc},${e.amount},${e.category},"${e.paidBy?.name || 'Unknown'}","${e.paidBy?.email || ''}",${date}\n`;
     });
 
@@ -53,7 +53,7 @@ export const exportPDF = async (req, res, next) => {
       .populate('fromUser', 'name')
       .populate('toUser', 'name');
 
-    const symbol = getCurrencySymbol(req.user.defaultCurrency || 'INR');
+    const symbol = getCurrencySymbol(group.currency || 'INR');
 
     const nets = {};
     group.members.forEach((m) => {
@@ -109,7 +109,7 @@ export const exportPDF = async (req, res, next) => {
     } else {
       expenses.forEach((e) => {
         doc.fontSize(11).text(
-          `${new Date(e.createdAt).toLocaleDateString()} - ${e.description}: ${symbol}${e.amount.toFixed(2)} (Paid by ${e.paidBy?.name})`
+          `${new Date(e.date || e.createdAt).toLocaleDateString()} - ${e.description}: ${symbol}${e.amount.toFixed(2)} (Paid by ${e.paidBy?.name})`
         );
       });
     }

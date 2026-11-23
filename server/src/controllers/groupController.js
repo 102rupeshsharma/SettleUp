@@ -1,16 +1,32 @@
 import crypto from 'crypto';
 import Group from '../models/Group.js';
+import Expense from '../models/Expense.js';
+import Settlement from '../models/Settlement.js';
+import Notification from '../models/Notification.js';
+import Activity from '../models/Activity.js';
+import User from '../models/User.js';
+import { calculateNets } from '../services/balances.js';
+import { logActivity } from '../services/activityLog.js';
+import { formatMoney } from '../utils/formatMoney.js';
+
+const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY'];
 
 export const createGroup = async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, currency } = req.body;
     if (!name) {
       return res.status(400).json({ message: 'Group name is required' });
     }
 
+    const requested = typeof currency === 'string' ? currency.trim().toUpperCase() : '';
+    const groupCurrency = SUPPORTED_CURRENCIES.includes(requested)
+      ? requested
+      : req.user.defaultCurrency || 'INR';
+
     const group = await Group.create({
       name,
       description,
+      currency: groupCurrency,
       createdBy: req.user._id,
       members: [
         {
@@ -61,7 +77,17 @@ export const updateGroup = async (req, res, next) => {
 
 export const deleteGroup = async (req, res, next) => {
   try {
-    await Group.findByIdAndDelete(req.group._id);
+    const groupId = req.group._id;
+    await Group.findByIdAndDelete(groupId);
+
+    // Remove everything that only made sense inside this group.
+    await Promise.all([
+      Expense.deleteMany({ groupId }),
+      Settlement.deleteMany({ groupId }),
+      Notification.deleteMany({ groupId }),
+      Activity.deleteMany({ groupId }),
+    ]);
+
     res.status(200).json({ message: 'Group deleted successfully' });
   } catch (error) {
     next(error);
@@ -113,6 +139,7 @@ export const joinGroup = async (req, res, next) => {
     });
 
     await group.save();
+    await logActivity(group._id, req.user._id, 'member_joined', 'joined the group');
     res.status(200).json(group);
   } catch (error) {
     next(error);
@@ -145,9 +172,20 @@ export const changeMemberRole = async (req, res, next) => {
       }
     }
 
+    const roleChanged = member.role !== role;
     member.role = role;
     await req.group.save();
-    
+
+    if (roleChanged) {
+      const target = await User.findById(userId).select('name');
+      await logActivity(
+        req.group._id,
+        req.user._id,
+        'role_changed',
+        `changed ${target?.name || 'a member'}'s role to ${role}`
+      );
+    }
+
     const updatedGroup = await Group.findById(req.group._id).populate('members.userId', 'name email avatar');
     res.status(200).json(updatedGroup);
   } catch (error) {
@@ -181,10 +219,49 @@ export const removeMember = async (req, res, next) => {
       }
     }
 
+    // Someone who still owes or is owed money can't go: their balance would
+    // silently drop out of the group's totals.
+    const isSelf = userId === req.user._id.toString();
+    const nets = await calculateNets(req.group);
+    const net = nets[userId] || 0;
+    if (Math.abs(net) > 0.01) {
+      const money = formatMoney(Math.abs(net), req.group.currency);
+      const position = net < 0 ? `owe${isSelf ? '' : 's'} ${money}` : `${isSelf ? 'are' : 'is'} owed ${money}`;
+      return res.status(400).json({
+        message: isSelf
+          ? `You still ${position} in this group. Settle up before leaving.`
+          : `This member still ${position} in this group. Settle up before removing them.`,
+      });
+    }
+
     req.group.members.splice(memberIndex, 1);
     await req.group.save();
 
+    if (isSelf) {
+      await logActivity(req.group._id, req.user._id, 'member_left', 'left the group');
+    } else {
+      const removed = await User.findById(userId).select('name');
+      await logActivity(
+        req.group._id,
+        req.user._id,
+        'member_removed',
+        `removed ${removed?.name || 'a member'} from the group`
+      );
+    }
+
     res.status(200).json({ message: 'Member removed successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listActivity = async (req, res, next) => {
+  try {
+    const activity = await Activity.find({ groupId: req.group._id })
+      .populate('actor', 'name avatar')
+      .sort({ createdAt: -1 })
+      .limit(100);
+    res.status(200).json(activity);
   } catch (error) {
     next(error);
   }

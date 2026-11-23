@@ -1,25 +1,61 @@
 import React, { useState } from 'react';
 import axiosInstance from '../../api/axiosInstance';
-import { X, Loader2, CreditCard } from 'lucide-react';
+import Modal from '../ui/Modal';
+import { Loader2 } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 
-const SettleModal = ({ isOpen, onClose, suggestion, groupId, onSuccess }) => {
-  const { formatCurrency } = useCurrency();
+const METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'bank', label: 'Bank transfer' },
+  { value: 'other', label: 'Other' },
+];
+
+/*
+ * Records a payment from the signed-in user to someone else in the group.
+ * With a `suggestion` it starts from that suggested payment (the amount can
+ * still be changed, e.g. to pay part of it). Without one, the user picks who
+ * they paid and how much.
+ *
+ * Mount it only while open so each opening starts from fresh values.
+ */
+const SettleModal = ({ isOpen, onClose, suggestion, members = [], currentUserId, groupId, currency, onSuccess }) => {
+  const { formatCurrency, currencySymbol } = useCurrency(currency);
+
+  const recipients = members
+    .map((m) => m.userId)
+    .filter((u) => u && u._id !== currentUserId);
+
+  const [toUser, setToUser] = useState(suggestion?.toUser?._id || recipients[0]?._id || '');
+  const [amount, setAmount] = useState(suggestion ? String(suggestion.amount) : '');
   const [method, setMethod] = useState('cash');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (!isOpen || !suggestion) return null;
+  if (!isOpen) return null;
+
+  const parsedAmount = parseFloat(amount);
+  const isPartial =
+    suggestion && !isNaN(parsedAmount) && parsedAmount > 0 && parsedAmount < suggestion.amount - 0.005;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
+    if (!toUser) {
+      setError('Choose who you paid');
+      return;
+    }
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError('Enter an amount greater than zero');
+      return;
+    }
+
+    setLoading(true);
     try {
       const response = await axiosInstance.post(`/groups/${groupId}/settle`, {
-        toUser: suggestion.toUser._id,
-        amount: suggestion.amount,
+        toUser,
+        amount: parseFloat(parsedAmount.toFixed(2)),
         method,
       });
       onSuccess(response.data);
@@ -32,88 +68,105 @@ const SettleModal = ({ isOpen, onClose, suggestion, groupId, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900 p-6 shadow-2xl dark:shadow-none animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
-            Record Settlement
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <Modal title="Record a payment" onClose={onClose}>
+      {error && (
+        <p role="alert" className="notice-error mt-4">{error}</p>
+      )}
 
-        {error && (
-          <div className="mt-4 rounded-lg bg-rose-500/10 p-3 text-sm text-rose-500 dark:text-rose-400 border border-rose-500/20">
-            {error}
+      <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+        {suggestion ? (
+          <p className="text-sm text-muted">
+            You owe <span className="font-medium text-ink">{suggestion.toUser.name}</span>{' '}
+            <span className="tabular-nums">{formatCurrency(suggestion.amount)}</span>.
+          </p>
+        ) : (
+          <div>
+            <label htmlFor="settleTo" className="field-label">Who did you pay?</label>
+            {recipients.length === 0 ? (
+              <p className="text-sm text-muted">There's nobody else in this group yet.</p>
+            ) : (
+              <select
+                id="settleTo"
+                value={toUser}
+                onChange={(e) => setToUser(e.target.value)}
+                className="field"
+              >
+                {recipients.map((u) => (
+                  <option key={u._id} value={u._id}>{u.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="space-y-3 rounded-lg bg-slate-50 dark:bg-slate-950 p-4 border border-slate-200 dark:border-slate-900/60 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Pay From</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-300">{suggestion.fromUser.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Pay To</span>
-              <span className="font-semibold text-slate-700 dark:text-slate-300">{suggestion.toUser.name}</span>
-            </div>
-            <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-900 pt-2.5">
-              <span className="text-slate-500 font-medium">Settle Amount</span>
-              <span className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(suggestion.amount)}
-              </span>
-            </div>
+        <div>
+          <label htmlFor="settleAmount" className="field-label">Amount paid</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">
+              {currencySymbol}
+            </span>
+            <input
+              id="settleAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="field pl-9 tabular-nums"
+              placeholder="0.00"
+            />
           </div>
+          {isPartial && (
+            <p className="mt-1.5 text-xs text-muted">
+              Part payment. {formatCurrency(suggestion.amount - parsedAmount)} will still be owed.
+            </p>
+          )}
+        </div>
 
-          <div>
-            <label htmlFor="methodSelect" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Payment Method
-            </label>
-            <select
-              id="methodSelect"
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none"
-            >
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-              <option value="bank">Bank Transfer</option>
-              <option value="other">Other</option>
-            </select>
+        <fieldset>
+          <legend className="field-label">How was it paid?</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {METHODS.map((m) => (
+              <label
+                key={m.value}
+                className={`cursor-pointer rounded-md border px-3 py-2 text-sm transition-colors ${
+                  method === m.value
+                    ? 'border-ink bg-sunken font-medium text-ink'
+                    : 'border-line text-muted hover:bg-sunken'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="method"
+                  value={m.value}
+                  checked={method === m.value}
+                  onChange={(e) => setMethod(e.target.value)}
+                  className="sr-only"
+                />
+                {m.label}
+              </label>
+            ))}
           </div>
+        </fieldset>
 
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-grow flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 active:scale-[0.98] disabled:opacity-50 transition-colors text-slate-950"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Recording...
-                </>
-              ) : (
-                'Confirm Settlement'
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-grow rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading || (!suggestion && recipients.length === 0)} className="btn btn-primary">
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Recording...
+              </>
+            ) : (
+              'Record payment'
+            )}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 

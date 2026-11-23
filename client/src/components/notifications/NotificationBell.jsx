@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axiosInstance from '../../api/axiosInstance';
 import { useSocket } from '../../context/SocketContext';
-import { Bell, Check, MailOpen } from 'lucide-react';
+import { Bell, Check } from 'lucide-react';
 
 const NotificationBell = () => {
   const socket = useSocket();
@@ -45,7 +45,12 @@ const NotificationBell = () => {
     socket.on('settlement:made', handleSocketNotification);
     socket.on('member:role-changed', handleSocketNotification);
 
+    // Reminders aren't pushed over the socket, so also pick them up whenever
+    // the user comes back to the tab.
+    window.addEventListener('focus', handleSocketNotification);
+
     return () => {
+      window.removeEventListener('focus', handleSocketNotification);
       socket.off('expense:added', handleSocketNotification);
       socket.off('expense:updated', handleSocketNotification);
       socket.off('expense:deleted', handleSocketNotification);
@@ -79,49 +84,41 @@ const NotificationBell = () => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-slate-800 dark:hover:text-white transition-colors"
+        aria-label="Notifications"
+        className="relative rounded-md p-2 text-muted transition-colors hover:bg-sunken hover:text-ink"
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-[18px] w-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-extrabold text-white ring-2 ring-white dark:ring-slate-950">
+          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-neg px-1 text-[10px] font-semibold text-on-neg">
             {unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-950 p-4 shadow-2xl dark:shadow-none z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-900 pb-2 mb-3">
-            <h4 className="text-xs font-bold text-slate-850 dark:text-slate-300 uppercase tracking-wider">
-              Notifications
-            </h4>
+        <div className="anim-pop absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-line bg-surface shadow-lg">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h4 className="text-sm font-semibold text-ink">Notifications</h4>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-0.5"
+                className="text-xs font-medium text-muted underline-offset-2 hover:text-ink hover:underline"
               >
-                <Check className="h-3 w-3" />
-                Clear All
+                Mark all read
               </button>
             )}
           </div>
 
-          <div className="max-h-60 overflow-y-auto space-y-2">
+          <div className="max-h-72 divide-y divide-line overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 flex flex-col items-center gap-2">
-                <MailOpen className="h-6 w-6 text-slate-400 dark:text-slate-700" />
-                No unread notifications
-              </div>
+              <p className="px-4 py-8 text-center text-sm text-muted">You're all caught up.</p>
             ) : (
               notifications.map((n) => (
-                <div
-                  key={n._id}
-                  className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-900/80 transition-colors text-xs border border-slate-200 dark:border-slate-900/60"
-                >
-                  <p className="text-slate-650 dark:text-slate-300 leading-relaxed flex-grow">{n.message}</p>
+                <div key={n._id} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <p className="flex-grow text-sm leading-snug text-ink">{n.message}</p>
                   <button
                     onClick={(e) => handleMarkRead(n._id, e)}
-                    className="p-1 rounded text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors shrink-0"
+                    className="shrink-0 rounded p-1 text-faint transition-colors hover:bg-sunken hover:text-ink"
                     title="Mark as read"
                   >
                     <Check className="h-3.5 w-3.5" />

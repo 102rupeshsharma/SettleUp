@@ -39,6 +39,14 @@ const groupSchema = new mongoose.Schema(
       type: String,
       unique: true,
     },
+    // Every amount in a group is in this one currency. Groups created before
+    // this field existed fall back to INR, the app's original default.
+    currency: {
+      type: String,
+      default: 'INR',
+      uppercase: true,
+      trim: true,
+    },
   },
   {
     timestamps: true,

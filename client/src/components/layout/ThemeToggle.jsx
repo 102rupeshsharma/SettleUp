@@ -20,13 +20,16 @@ const ThemeToggle = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+
   return (
     <button
       onClick={toggleTheme}
-      className="rounded-lg p-2 text-slate-400 hover:bg-slate-900 hover:text-white transition-colors"
-      title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+      className="rounded-md p-2 text-muted transition-colors hover:bg-sunken hover:text-ink"
+      title={label}
+      aria-label={label}
     >
-      {theme === 'dark' ? <Sun className="h-5 w-5 text-amber-400" /> : <Moon className="h-5 w-5 text-slate-400" />}
+      {theme === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
     </button>
   );
 };

@@ -11,18 +11,28 @@ import SettleModal from '../components/balances/SettleModal';
 import useGroupSocket from '../hooks/useGroupSocket';
 import ExportButtons from '../components/groups/ExportButtons';
 import Loading from '../components/Loading';
-import { Users, CreditCard, Settings, ChevronLeft, UserPlus, Trash2, ShieldAlert, Loader2, RefreshCw, LogOut, Plus, Coins, Receipt, BarChart2 } from 'lucide-react';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import ActivityFeed from '../components/groups/ActivityFeed';
+import { ChevronLeft, Loader2, Plus } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
+
+const METHOD_LABELS = { cash: 'Cash', upi: 'UPI', bank: 'Bank transfer', other: 'Other' };
 
 const GroupDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { formatCurrency } = useCurrency();
 
   const [group, setGroup] = useState(null);
+  const { formatCurrency, currencyCode } = useCurrency(group?.currency);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionNotice, setActionNotice] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const [activity, setActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [remindingId, setRemindingId] = useState(null);
   const [activeTab, setActiveTab] = useState('expenses');
 
   const [expenses, setExpenses] = useState([]);
@@ -77,6 +87,28 @@ const GroupDetail = () => {
     }
   }, [id]);
 
+  // The history is only loaded while its tab is open, and refreshed when an
+  // expense or payment arrives so it stays current.
+  useEffect(() => {
+    if (!id || activeTab !== 'activity') return;
+    let cancelled = false;
+    const fetchActivity = async () => {
+      setActivityLoading(true);
+      try {
+        const response = await axiosInstance.get(`/groups/${id}/activity`);
+        if (!cancelled) setActivity(response.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setActivityLoading(false);
+      }
+    };
+    fetchActivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, activeTab, expenses, settlements]);
+
   const fetchGroupDetails = async () => {
     try {
       const response = await axiosInstance.get(`/groups/${id}`);
@@ -116,14 +148,17 @@ const GroupDetail = () => {
     return <Loading />;
   }
 
+  // `error` is only for a failed page load. Failures of individual actions go
+  // to `actionError` so they show inline instead of replacing the whole page.
   if (error || !group) {
     return (
-      <div className="mx-auto max-w-md mt-20 p-6 text-center space-y-4 bg-slate-900 border border-slate-800 rounded-2xl">
-        <ShieldAlert className="h-12 w-12 text-rose-500 mx-auto" />
-        <h2 className="text-xl font-bold text-white">Error Loading Group</h2>
-        <p className="text-slate-400 text-sm">{error || 'Group not found.'}</p>
-        <Link to="/dashboard" className="inline-block bg-emerald-500 text-slate-950 px-4 py-2 rounded-lg font-semibold text-sm">
-          Back to Dashboard
+      <div className="mx-auto w-full max-w-sm px-4 py-14 sm:py-20">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
+          We couldn't open this group
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">{error || 'Group not found.'}</p>
+        <Link to="/dashboard" className="btn btn-primary mt-6">
+          Back to your groups
         </Link>
       </div>
     );
@@ -136,13 +171,15 @@ const GroupDetail = () => {
   const isAdmin = memberRole === 'admin';
   const isViewer = memberRole === 'viewer';
 
+  const closeConfirm = () => setConfirm(null);
+
   const handleUpdateGroup = async (e) => {
     e.preventDefault();
-    setError('');
+    setActionError('');
     setEditSuccess(false);
 
     if (!editName.trim()) {
-      setError('Group name is required');
+      setActionError('Group name is required');
       return;
     }
 
@@ -160,14 +197,15 @@ const GroupDetail = () => {
       setEditSuccess(true);
       setTimeout(() => setEditSuccess(false), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update group');
+      setActionError(err.response?.data?.message || 'Failed to update group');
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleRegenerateCode = async () => {
-    if (!window.confirm('Are you sure you want to regenerate the invite code? The old code will stop working.')) return;
+  const regenerateCode = async () => {
+    closeConfirm();
+    setActionError('');
     try {
       const response = await axiosInstance.post(`/groups/${id}/invite`);
       setGroup((prev) => ({
@@ -175,18 +213,39 @@ const GroupDetail = () => {
         inviteCode: response.data.inviteCode,
       }));
     } catch (err) {
-      setError('Failed to regenerate invite code');
+      setActionError('Failed to regenerate invite code');
     }
   };
 
-  const handleDeleteGroup = async () => {
-    if (!window.confirm('WARNING: Are you sure you want to delete this group? This action is permanent.')) return;
+  const handleRegenerateCode = () => {
+    setConfirm({
+      title: 'Get a new invite code?',
+      message: 'The current code and link will stop working straight away. People already in the group are not affected.',
+      confirmLabel: 'Regenerate code',
+      danger: false,
+      action: regenerateCode,
+    });
+  };
+
+  const deleteGroup = async () => {
+    closeConfirm();
+    setActionError('');
     try {
       await axiosInstance.delete(`/groups/${id}`);
       navigate('/dashboard');
     } catch (err) {
-      setError('Failed to delete group');
+      setActionError('Failed to delete group');
     }
+  };
+
+  const handleDeleteGroup = () => {
+    setConfirm({
+      title: `Delete ${group.name}?`,
+      message: 'This removes the group for every member, along with its expenses and payment history. It cannot be undone.',
+      confirmLabel: 'Delete group',
+      danger: true,
+      action: deleteGroup,
+    });
   };
 
   const handleMembersUpdate = (hasLeft = false) => {
@@ -197,19 +256,54 @@ const GroupDetail = () => {
     }
   };
 
+  const leaveGroup = async () => {
+    closeConfirm();
+    setActionError('');
+    try {
+      await axiosInstance.delete(`/groups/${id}/members/${user._id}`);
+      handleMembersUpdate(true);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to leave group');
+    }
+  };
+
+  const handleLeaveGroup = () => {
+    setConfirm({
+      title: 'Leave this group?',
+      message: "You'll lose access to this group's expenses and balances. You can rejoin with an invite code.",
+      confirmLabel: 'Leave group',
+      danger: true,
+      action: leaveGroup,
+    });
+  };
+
   const handleEditExpense = (expense) => {
     navigate(`/groups/${id}/expenses/${expense._id}/edit`);
   };
 
-  const handleDeleteExpense = async (expenseId) => {
-    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+  const deleteExpense = async (expenseId) => {
+    closeConfirm();
+    setActionError('');
     try {
       await axiosInstance.delete(`/expenses/${expenseId}`);
       setExpenses((prev) => prev.filter((e) => e._id !== expenseId));
       fetchBalancesAndSuggestions();
     } catch (err) {
-      setError('Failed to delete expense');
+      setActionError('Failed to delete expense');
     }
+  };
+
+  const handleDeleteExpense = (expenseId) => {
+    const target = expenses.find((e) => e._id === expenseId);
+    setConfirm({
+      title: 'Delete this expense?',
+      message: target
+        ? `"${target.description}" will be removed and everyone's balance recalculated.`
+        : "It will be removed and everyone's balance recalculated.",
+      confirmLabel: 'Delete expense',
+      danger: true,
+      action: () => deleteExpense(expenseId),
+    });
   };
 
   const triggerSettleUp = (suggestion) => {
@@ -217,174 +311,196 @@ const GroupDetail = () => {
     setIsSettleOpen(true);
   };
 
+  // Free-form payment: no suggestion, the user picks who they paid and how much.
+  const openRecordPayment = () => {
+    setSelectedSuggestion(null);
+    setIsSettleOpen(true);
+  };
+
   const handleSettleSuccess = () => {
     fetchBalancesAndSuggestions();
   };
 
+  const handleRemind = async (suggestion) => {
+    const debtorId = suggestion.fromUser._id;
+    setActionError('');
+    setActionNotice('');
+    setRemindingId(debtorId);
+    try {
+      const response = await axiosInstance.post(`/groups/${id}/remind/${debtorId}`);
+      setActionNotice(response.data.message);
+      setTimeout(() => setActionNotice(''), 4000);
+    } catch (err) {
+      setActionError(err.response?.data?.message || 'Failed to send reminder');
+    } finally {
+      setRemindingId(null);
+    }
+  };
+
+  const memberCount = group.members?.length || 0;
+  const tabs = [
+    { key: 'expenses', label: 'Expenses' },
+    { key: 'balances', label: 'Balances' },
+    { key: 'activity', label: 'Activity' },
+    { key: 'members', label: `Members (${memberCount})` },
+    { key: 'settings', label: 'Settings' },
+  ];
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 bg-transparent text-slate-800 dark:text-white space-y-6">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <Link
         to="/dashboard"
-        className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+        className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-ink"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to Dashboard
+        All groups
       </Link>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-6 rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/30 backdrop-blur-sm shadow-sm dark:shadow-none">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+      <header className="mt-3 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             {group.name}
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xl">
-            {group.description || 'No description provided.'}
+          {group.description && (
+            <p className="mt-1 max-w-xl text-sm text-muted">{group.description}</p>
+          )}
+          <p className="mt-1 text-xs text-muted">
+            {memberCount} {memberCount === 1 ? 'member' : 'members'}
+            <span className="mx-1.5 text-faint">·</span>
+            amounts in {group.currency || currencyCode}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link
-            to={`/groups/${id}/analytics`}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-650 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-          >
-            <BarChart2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-            Analytics
+
+        <div className="flex flex-wrap items-center gap-2">
+          {!isViewer && (
+            <Link to={`/groups/${id}/expenses/add`} className="btn btn-primary">
+              <Plus className="h-4 w-4" />
+              Add expense
+            </Link>
+          )}
+          <button onClick={() => setIsInviteOpen(true)} className="btn btn-secondary">
+            Invite
+          </button>
+          <Link to={`/groups/${id}/analytics`} className="btn btn-secondary">
+            Spending
           </Link>
           <ExportButtons groupId={id} />
-          <button
-            onClick={() => setIsInviteOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-          >
-            <UserPlus className="h-4 w-4" />
-            Invite Code
-          </button>
           {!isAdmin && (
-            <button
-              onClick={() => handleMembersUpdate(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/50 px-4 py-2.5 text-sm font-semibold text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-              Leave Group
+            <button onClick={handleLeaveGroup} className="btn btn-ghost px-2.5 text-neg hover:bg-neg-soft hover:text-neg">
+              Leave
             </button>
           )}
         </div>
+      </header>
+
+      {actionError && (
+        <p role="alert" className="notice-error mt-5 flex items-start justify-between gap-3">
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError('')}
+            className="shrink-0 text-xs font-medium underline underline-offset-2"
+          >
+            Dismiss
+          </button>
+        </p>
+      )}
+
+      {actionNotice && (
+        <p role="status" className="notice-ok mt-5">{actionNotice}</p>
+      )}
+
+      <div role="tablist" className="mt-6 flex gap-6 overflow-x-auto border-b border-line">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`-mb-px shrink-0 border-b-2 pb-2.5 text-sm transition-colors ${
+              activeTab === tab.key
+                ? 'border-ink font-medium text-ink'
+                : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex border-b border-slate-200 dark:border-slate-900">
-        <button
-          onClick={() => setActiveTab('expenses')}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'expenses'
-              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-        >
-          <CreditCard className="h-4 w-4" />
-          Expenses
-        </button>
-        <button
-          onClick={() => setActiveTab('balances')}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'balances'
-              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-        >
-          <Coins className="h-4 w-4" />
-          Balances & Settlements
-        </button>
-        <button
-          onClick={() => setActiveTab('members')}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'members'
-              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-        >
-          <Users className="h-4 w-4" />
-          Members
-          <span className="rounded-full bg-slate-100 dark:bg-slate-900 px-2 py-0.5 text-xs text-slate-600 dark:text-slate-500">
-            {group.members?.length || 0}
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'settings'
-              ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
-      </div>
-
-      <div className="pt-4">
+      <div className="pt-6">
         {activeTab === 'expenses' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Expenses Log</h3>
-              {!isViewer && (
-                <Link
-                  to={`/groups/${id}/expenses/add`}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-emerald-400 transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Expense
-                </Link>
-              )}
-            </div>
-
-            <ExpenseList
-              expenses={expenses}
-              currentUserId={user?._id}
-              currentUserRole={memberRole}
-              onEdit={handleEditExpense}
-              onDelete={handleDeleteExpense}
-            />
-          </div>
+          <ExpenseList
+            expenses={expenses}
+            members={group.members}
+            currentUserId={user?._id}
+            currentUserRole={memberRole}
+            currency={group.currency}
+            onEdit={handleEditExpense}
+            onDelete={handleDeleteExpense}
+          />
         )}
 
         {activeTab === 'balances' && (
-          <div className="space-y-8">
+          <div className="space-y-10">
             <div className="grid gap-8 md:grid-cols-2">
-              <BalanceSummary balances={balances} />
+              <BalanceSummary balances={balances} currency={group.currency} />
               <SettleUpSuggestions
                 suggestions={suggestions}
                 currentUserId={user?._id}
+                currency={group.currency}
                 onSettle={triggerSettleUp}
+                onRemind={handleRemind}
+                remindingId={remindingId}
               />
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
-                Settlements History (Ledger)
-              </h3>
+            <section>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-display text-base font-semibold text-ink">Payments so far</h3>
+                {memberCount > 1 && (
+                  <button onClick={openRecordPayment} className="btn btn-secondary">
+                    Record a payment
+                  </button>
+                )}
+              </div>
               {settlements.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500 rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 shadow-sm dark:shadow-none">
-                  No settlements recorded yet.
-                </div>
+                <p className="panel mt-3 px-4 py-8 text-center text-sm text-muted">
+                  No payments recorded yet.
+                </p>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 shadow-sm dark:shadow-none">
-                  <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-900">
-                    {settlements.map((settle) => (
-                      <div key={settle._id} className="flex justify-between items-center p-4 text-xs hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
-                        <div className="text-slate-600 dark:text-slate-300">
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{settle.fromUser?.name}</span>
+                <ul className="panel mt-3 max-h-72 divide-y divide-line overflow-y-auto">
+                  {settlements.map((settle) => (
+                    <li key={settle._id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate text-ink">
+                          <span className="font-medium">{settle.fromUser?.name}</span>
                           {' paid '}
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{settle.toUser?.name}</span>
-                          {' via '}
-                          <span className="capitalize text-slate-500 dark:text-slate-400 font-semibold">{settle.method}</span>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block">{formatCurrency(settle.amount)}</span>
-                          <span className="text-[10px] text-slate-500 block">
-                            {new Date(settle.settledAt).toLocaleDateString()}
-                          </span>
-                        </div>
+                          <span className="font-medium">{settle.toUser?.name}</span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {new Date(settle.settledAt).toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                          <span className="mx-1.5 text-faint">·</span>
+                          {METHOD_LABELS[settle.method] || settle.method}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <span className="shrink-0 font-medium tabular-nums text-ink">
+                        {formatCurrency(settle.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </div>
+            </section>
           </div>
+        )}
+
+        {activeTab === 'activity' && (
+          <ActivityFeed activity={activity} loading={activityLoading} currentUserId={user?._id} />
         )}
 
         {activeTab === 'members' && (
@@ -398,92 +514,74 @@ const GroupDetail = () => {
         )}
 
         {activeTab === 'settings' && (
-          <div className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 p-6 space-y-6 shadow-sm dark:shadow-none">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Update Group Details</h3>
-              {editSuccess && (
-                <div className="rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-500 dark:text-emerald-400 border border-emerald-500/20">
-                  Group updated successfully!
-                </div>
+          <div className="max-w-xl space-y-10">
+            <section>
+              <h3 className="font-display text-base font-semibold text-ink">Group details</h3>
+              {!isAdmin && (
+                <p className="mt-1 text-sm text-muted">Only admins can change these.</p>
               )}
-              <form onSubmit={handleUpdateGroup} className="space-y-4">
+              {editSuccess && <p role="status" className="notice-ok mt-3">Group updated.</p>}
+              <form onSubmit={handleUpdateGroup} className="mt-4 space-y-4">
                 <div>
-                  <label htmlFor="groupName" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Group Name
-                  </label>
+                  <label htmlFor="groupName" className="field-label">Name</label>
                   <input
                     id="groupName"
                     type="text"
                     disabled={!isAdmin}
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+                    className="field"
                   />
                 </div>
                 <div>
-                  <label htmlFor="groupDesc" className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Description
-                  </label>
+                  <label htmlFor="groupDesc" className="field-label">Description</label>
                   <textarea
                     id="groupDesc"
                     disabled={!isAdmin}
                     value={editDesc}
                     onChange={(e) => setEditDesc(e.target.value)}
                     rows="3"
-                    className="mt-1.5 block w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-2 text-sm text-slate-800 dark:text-white focus:border-emerald-500 focus:outline-none resize-none disabled:opacity-50"
+                    className="field resize-none"
                   />
                 </div>
-                {isAdmin ? (
-                  <button
-                    type="submit"
-                    disabled={editLoading}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 active:scale-95 disabled:opacity-50 transition-colors"
-                  >
+                {isAdmin && (
+                  <button type="submit" disabled={editLoading} className="btn btn-primary">
                     {editLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Save Changes
+                    Save changes
                   </button>
-                ) : (
-                  <p className="text-xs text-slate-550 dark:text-slate-500">
-                    * Admin permissions are required to modify these fields.
-                  </p>
                 )}
               </form>
-            </div>
+            </section>
 
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-900/10 p-6 space-y-6 shadow-sm dark:shadow-none">
-              <h3 className="text-lg font-bold text-slate-850 dark:text-slate-100">Danger Zone</h3>
-              <div className="space-y-4">
-                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-900 bg-slate-50 dark:bg-slate-900/40 space-y-2">
-                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">Regenerate Invite Code</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Forces regeneration of the invite code. The existing invite code will instantly become invalid.
-                  </p>
-                  <button
-                    onClick={handleRegenerateCode}
-                    disabled={!isAdmin}
-                    className="mt-2 flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-950 px-3.5 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-slate-200 dark:hover:bg-slate-900 disabled:opacity-50 transition-colors"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Regenerate Code
-                  </button>
-                </div>
+            <section className="border-t border-line pt-8">
+              <h3 className="font-display text-base font-semibold text-ink">Invite code</h3>
+              <p className="mt-1 text-sm text-muted">
+                Getting a new code stops the current code and link from working. Useful if the
+                old one was shared with the wrong people.
+              </p>
+              <button
+                onClick={handleRegenerateCode}
+                disabled={!isAdmin}
+                className="btn btn-secondary mt-3"
+              >
+                Regenerate code
+              </button>
+            </section>
 
-                <div className="p-4 rounded-xl border border-rose-200/50 dark:border-rose-905/20 bg-rose-50/50 dark:bg-rose-950/5 space-y-2">
-                  <h4 className="text-sm font-bold text-rose-600 dark:text-rose-400">Delete This Group</h4>
-                  <p className="text-xs text-rose-500/70">
-                    Permanently deletes this group, all memberships, and ledger transaction histories. This cannot be undone.
-                  </p>
-                  <button
-                    onClick={handleDeleteGroup}
-                    disabled={!isAdmin}
-                    className="mt-2 flex items-center gap-1.5 rounded-lg bg-rose-550 dark:bg-rose-500 px-3.5 py-2 text-xs font-semibold text-slate-950 hover:bg-rose-400 disabled:opacity-50 transition-colors text-slate-950"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete Group
-                  </button>
-                </div>
-              </div>
-            </div>
+            <section className="border-t border-line pt-8">
+              <h3 className="font-display text-base font-semibold text-ink">Delete group</h3>
+              <p className="mt-1 text-sm text-muted">
+                Removes the group for everyone, including all expenses and payment history. This
+                cannot be undone.
+              </p>
+              <button
+                onClick={handleDeleteGroup}
+                disabled={!isAdmin}
+                className="btn btn-danger mt-3"
+              >
+                Delete group
+              </button>
+            </section>
           </div>
         )}
       </div>
@@ -495,12 +593,28 @@ const GroupDetail = () => {
         groupName={group.name}
       />
 
-      <SettleModal
-        isOpen={isSettleOpen}
-        onClose={() => setIsSettleOpen(false)}
-        suggestion={selectedSuggestion}
-        groupId={group._id}
-        onSuccess={handleSettleSuccess}
+      {/* Mounted only while open so each opening starts with fresh values */}
+      {isSettleOpen && (
+        <SettleModal
+          isOpen
+          onClose={() => setIsSettleOpen(false)}
+          suggestion={selectedSuggestion}
+          members={group.members}
+          currentUserId={user?._id}
+          groupId={group._id}
+          currency={group.currency}
+          onSuccess={handleSettleSuccess}
+        />
+      )}
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmLabel={confirm?.confirmLabel}
+        danger={confirm?.danger}
+        onConfirm={() => confirm?.action()}
+        onCancel={closeConfirm}
       />
     </div>
   );

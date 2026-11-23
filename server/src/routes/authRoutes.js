@@ -7,6 +7,8 @@ import {
   logout,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendVerification,
   getMe,
   updateMe,
 } from '../controllers/authController.js';
@@ -34,6 +36,8 @@ router.post('/auth/refresh', refresh);
 router.post('/auth/logout', logout);
 router.post('/auth/forgot-password', forgotPassword);
 router.post('/auth/reset-password/:token', resetPassword);
+router.post('/auth/verify-email/:token', verifyEmail);
+router.post('/auth/resend-verification', isAuthenticated, resendVerification);
 
 // User profile endpoints
 router.get('/users/me', isAuthenticated, getMe);

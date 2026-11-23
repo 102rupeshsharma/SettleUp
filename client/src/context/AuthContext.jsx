@@ -87,7 +87,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Called after the email confirmation link succeeds, so the signed-in
+  // session reflects it without a reload.
+  const markVerified = () => {
+    setUser((prev) => (prev ? { ...prev, isVerified: true } : prev));
+  };
+
   const value = {
+    markVerified,
     user,
     accessToken,
     loading,

@@ -10,6 +10,96 @@ import {
 } from '../utils/generateToken.js';
 import { sendEmail } from '../utils/sendEmail.js';
 
+const VERIFY_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+// The raw token goes in the emailed link; only its hash is stored.
+const createVerificationToken = () => {
+  const raw = crypto.randomBytes(20).toString('hex');
+  return {
+    raw,
+    hashed: hashToken(raw),
+    expires: new Date(Date.now() + VERIFY_TOKEN_TTL_MS),
+  };
+};
+
+const sendVerificationEmail = (user, rawToken) => {
+  const verifyUrl = `${env.FRONTEND_URL}/verify-email/${rawToken}`;
+  return sendEmail({
+    to: user.email,
+    subject: 'SettleUp - Confirm your email address',
+    html: `
+      <h1>Confirm your email</h1>
+      <p>Hello ${user.name},</p>
+      <p>Click the link below to confirm this is your email address. The link works for 24 hours.</p>
+      <a href="${verifyUrl}" target="_blank">${verifyUrl}</a>
+      <p>If you didn't create a SettleUp account, you can ignore this email.</p>
+    `,
+  });
+};
+
+// @desc    Confirm an email address from the emailed link
+// @route   POST /api/auth/verify-email/:token
+// @access  Public
+export const verifyEmail = async (req, res, next) => {
+  try {
+    const user = await User.findOne({
+      emailVerifyToken: hashToken(req.params.token),
+      emailVerifyExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      res.status(400);
+      throw new Error('This confirmation link is invalid or has expired');
+    }
+
+    // The token is left in place until it expires so opening the link twice
+    // still succeeds.
+    if (!user.isVerified) {
+      await User.findByIdAndUpdate(user._id, { isVerified: true });
+    }
+
+    res.status(200).json({ message: 'Email confirmed', email: user.email });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Send a fresh confirmation link to the signed-in user
+// @route   POST /api/auth/resend-verification
+// @access  Private (Protected)
+export const resendVerification = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+
+    if (user.isVerified) {
+      return res.status(200).json({ message: 'Your email is already confirmed' });
+    }
+
+    const verification = createVerificationToken();
+    await User.findByIdAndUpdate(user._id, {
+      emailVerifyToken: verification.hashed,
+      emailVerifyExpires: verification.expires,
+    });
+
+    try {
+      await sendVerificationEmail(user, verification.raw);
+    } catch (err) {
+      res.status(500);
+      throw new Error('Email could not be sent. Please try again later.');
+    }
+
+    res.status(200).json({ message: `Confirmation link sent to ${user.email}` });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Register a new user
 // @route   POST /api/auth/signup
 // @access  Public
@@ -33,10 +123,14 @@ export const signup = async (req, res, next) => {
       throw new Error('User already exists with this email');
     }
 
+    const verification = createVerificationToken();
+
     const user = await User.create({
       name,
       email,
       password,
+      emailVerifyToken: verification.hashed,
+      emailVerifyExpires: verification.expires,
     });
 
     const accessToken = generateAccessToken(user._id);
@@ -44,9 +138,19 @@ export const signup = async (req, res, next) => {
 
     sendRefreshTokenCookie(res, refreshToken);
 
+    // Signing up doesn't wait on the email; the account works either way and
+    // the link can be re-sent from the dashboard.
+    if (env.NODE_ENV !== 'test') {
+      sendVerificationEmail(user, verification.raw).catch((err) => {
+        console.error('[Auth] Could not send verification email:', err.message);
+      });
+    }
+
     // Convert to object and delete select: false fields just in case
     const userResponse = user.toObject();
     delete userResponse.password;
+    delete userResponse.emailVerifyToken;
+    delete userResponse.emailVerifyExpires;
 
     res.status(201).json({
       user: userResponse,

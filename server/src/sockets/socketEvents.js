@@ -6,17 +6,19 @@ const getRoomEmitter = (groupId) => {
   return io.to(`group:${groupId}`);
 };
 
-export const emitExpenseAdded = (groupId, expense) => {
+// `currency` is the group's currency, sent along so clients can format the
+// amount without looking the group up.
+export const emitExpenseAdded = (groupId, expense, currency) => {
   const emitter = getRoomEmitter(groupId);
   if (emitter) {
-    emitter.emit('expense:added', { expense });
+    emitter.emit('expense:added', { expense, currency });
   }
 };
 
-export const emitExpenseUpdated = (groupId, expense) => {
+export const emitExpenseUpdated = (groupId, expense, currency) => {
   const emitter = getRoomEmitter(groupId);
   if (emitter) {
-    emitter.emit('expense:updated', { expense });
+    emitter.emit('expense:updated', { expense, currency });
   }
 };
 
@@ -27,10 +29,10 @@ export const emitExpenseDeleted = (groupId, expenseId) => {
   }
 };
 
-export const emitSettlementMade = (groupId, settlement) => {
+export const emitSettlementMade = (groupId, settlement, currency) => {
   const emitter = getRoomEmitter(groupId);
   if (emitter) {
-    emitter.emit('settlement:made', { settlement });
+    emitter.emit('settlement:made', { settlement, currency });
   }
 };
 

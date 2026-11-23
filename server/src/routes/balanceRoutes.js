@@ -6,6 +6,7 @@ import {
   getSuggestedSettlements,
   settleUp,
   listSettlements,
+  remindMember,
 } from '../controllers/balanceController.js';
 import { validateSettlement } from '../middleware/validationMiddleware.js';
 
@@ -15,5 +16,6 @@ router.get('/groups/:id/balances', isAuthenticated, isGroupMember, getBalances);
 router.get('/groups/:id/settlements/suggested', isAuthenticated, isGroupMember, getSuggestedSettlements);
 router.post('/groups/:id/settle', isAuthenticated, isGroupMember, validateSettlement, settleUp);
 router.get('/groups/:id/settlements', isAuthenticated, isGroupMember, listSettlements);
+router.post('/groups/:id/remind/:userId', isAuthenticated, isGroupMember, remindMember);
 
 export default router;

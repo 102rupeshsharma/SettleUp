@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
-import { X, Info } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 
 const Toast = () => {
@@ -25,28 +25,33 @@ const Toast = () => {
   useEffect(() => {
     if (!socket || !user) return;
 
-    const handleExpenseAdded = ({ expense }) => {
+    // Events carry the group's currency. If one arrives without it, the amount
+    // is left out rather than shown with the wrong symbol.
+    const amountText = (amount, currency) =>
+      currency ? ` (${formatCurrency(amount, currency)})` : '';
+
+    const handleExpenseAdded = ({ expense, currency }) => {
       const actorId = expense.createdBy?._id || expense.createdBy;
       if (actorId.toString() !== user._id.toString()) {
-        addToast(`New Expense: ${expense.paidBy?.name || 'Someone'} added "${expense.description}" (${formatCurrency(expense.amount)})`);
+        addToast(`${expense.paidBy?.name || 'Someone'} added "${expense.description}"${amountText(expense.amount, currency)}`);
       }
     };
 
     const handleExpenseUpdated = ({ expense }) => {
       const actorId = expense.createdBy?._id || expense.createdBy;
       if (actorId.toString() !== user._id.toString()) {
-        addToast(`Updated Expense: "${expense.description}" was modified`);
+        addToast(`"${expense.description}" was updated`);
       }
     };
 
     const handleExpenseDeleted = () => {
-      addToast(`Deleted Expense: An expense was removed from the group`);
+      addToast('An expense was deleted');
     };
 
-    const handleSettlementMade = ({ settlement }) => {
+    const handleSettlementMade = ({ settlement, currency }) => {
       const actorId = settlement.fromUser?._id || settlement.fromUser;
       if (actorId.toString() !== user._id.toString()) {
-        addToast(`Settlement Recorded: ${settlement.fromUser?.name || 'Someone'} paid ${settlement.toUser?.name || 'Someone'} (${formatCurrency(settlement.amount)})`);
+        addToast(`${settlement.fromUser?.name || 'Someone'} paid ${settlement.toUser?.name || 'someone'}${amountText(settlement.amount, currency)}`);
       }
     };
 
@@ -66,19 +71,18 @@ const Toast = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[9999] max-w-sm space-y-3 pointer-events-none">
+    <div className="pointer-events-none fixed right-4 bottom-4 z-[9999] max-w-sm space-y-2">
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="pointer-events-auto flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-slate-900 px-4 py-3 text-xs text-slate-100 shadow-2xl ring-1 ring-emerald-500/10 animate-in slide-in-from-bottom-5 duration-300"
+          role="status"
+          className="anim-pop pointer-events-auto flex items-center justify-between gap-3 rounded-md bg-ink px-4 py-3 text-sm text-page shadow-lg"
         >
-          <div className="flex items-center gap-2">
-            <Info className="h-4 w-4 text-emerald-400 shrink-0" />
-            <span>{t.message}</span>
-          </div>
+          <span>{t.message}</span>
           <button
             onClick={() => removeToast(t.id)}
-            className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-white transition-colors shrink-0"
+            aria-label="Dismiss"
+            className="shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100"
           >
             <X className="h-3.5 w-3.5" />
           </button>
