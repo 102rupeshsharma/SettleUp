@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import AuthShell from '../components/layout/AuthShell';
+import usePageTitle from '../hooks/usePageTitle';
 
 const ForgotPassword = () => {
+  usePageTitle('Reset password');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -48,7 +51,7 @@ const ForgotPassword = () => {
   );
 
   return (
-    <div className="mx-auto w-full max-w-sm px-4 py-14 sm:py-20">
+    <AuthShell>
       {success ? (
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Check your inbox</h1>
@@ -111,7 +114,7 @@ const ForgotPassword = () => {
           <div className="mt-6">{backLink}</div>
         </>
       )}
-    </div>
+    </AuthShell>
   );
 };
 

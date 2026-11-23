@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Loader2 } from 'lucide-react';
+import AuthShell from '../components/layout/AuthShell';
+import usePageTitle from '../hooks/usePageTitle';
 
 const Signup = () => {
+  usePageTitle('Create account');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +60,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-sm px-4 py-14 sm:py-20">
+    <AuthShell>
       <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Create your account</h1>
       <p className="mt-1.5 text-sm text-muted">
         Already have one?{' '}
@@ -129,7 +132,7 @@ const Signup = () => {
           )}
         </button>
       </form>
-    </div>
+    </AuthShell>
   );
 };
 

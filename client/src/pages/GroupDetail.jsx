@@ -13,6 +13,7 @@ import ExportButtons from '../components/groups/ExportButtons';
 import Loading from '../components/Loading';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ActivityFeed from '../components/groups/ActivityFeed';
+import usePageTitle from '../hooks/usePageTitle';
 import { ChevronLeft, Loader2, Plus } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
 
@@ -24,6 +25,7 @@ const GroupDetail = () => {
   const { user } = useAuth();
 
   const [group, setGroup] = useState(null);
+  usePageTitle(group?.name);
   const { formatCurrency, currencyCode } = useCurrency(group?.currency);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -338,6 +340,7 @@ const GroupDetail = () => {
   };
 
   const memberCount = group.members?.length || 0;
+  const myBalance = balances.find((b) => b.userId === user?._id);
   const tabs = [
     { key: 'expenses', label: 'Expenses' },
     { key: 'balances', label: 'Balances' },
@@ -369,6 +372,21 @@ const GroupDetail = () => {
             <span className="mx-1.5 text-faint">·</span>
             amounts in {group.currency || currencyCode}
           </p>
+          {myBalance && (
+            <p className="mt-3">
+              {myBalance.net > 0.01 ? (
+                <span className="pill bg-accent-soft text-pos">
+                  You get back <span className="tabular-nums">{formatCurrency(myBalance.net)}</span>
+                </span>
+              ) : myBalance.net < -0.01 ? (
+                <span className="pill bg-neg-soft text-neg">
+                  You owe <span className="tabular-nums">{formatCurrency(Math.abs(myBalance.net))}</span>
+                </span>
+              ) : (
+                <span className="pill bg-sunken text-muted">You're settled up</span>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

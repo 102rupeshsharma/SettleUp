@@ -11,12 +11,13 @@ const Modal = ({ title, onClose, children }) => {
   }, [onClose]);
 
   return (
-    <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 sm:items-center">
+    <div className="anim-fade fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 backdrop-blur-[2px] sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="anim-pop w-full max-w-md rounded-xl border border-line bg-surface p-5 shadow-xl"
+        style={{ boxShadow: 'var(--pop-shadow)' }}
+        className="anim-pop max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-line bg-surface p-5 sm:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>

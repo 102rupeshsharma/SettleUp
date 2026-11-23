@@ -16,6 +16,7 @@ import Analytics from './pages/Analytics';
 import { SocketProvider } from './context/SocketContext';
 import Toast from './components/notifications/Toast';
 import Loading from './components/Loading';
+import Footer from './components/layout/Footer';
 import { useAuth } from './context/AuthContext';
 
 const Home = () => {
@@ -142,6 +143,7 @@ const App = () => {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>
+            <Footer />
           </div>
         </SocketProvider>
       </AuthProvider>

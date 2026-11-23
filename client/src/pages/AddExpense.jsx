@@ -6,6 +6,7 @@ import ReceiptUpload from '../components/expenses/ReceiptUpload';
 import Loading from '../components/Loading';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
+import usePageTitle from '../hooks/usePageTitle';
 
 // Date -> "YYYY-MM-DD" in the user's own timezone, for <input type="date">.
 const toInputDate = (value) => {
@@ -36,6 +37,7 @@ const AddExpense = () => {
   const [date, setDate] = useState(() => toInputDate(new Date()));
 
   const isEdit = !!expenseId;
+  usePageTitle(isEdit ? 'Edit expense' : 'Add an expense');
 
   useEffect(() => {
     const fetchData = async () => {

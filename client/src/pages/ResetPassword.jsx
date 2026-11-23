@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import { Loader2 } from 'lucide-react';
+import AuthShell from '../components/layout/AuthShell';
+import usePageTitle from '../hooks/usePageTitle';
 
 const ResetPassword = () => {
+  usePageTitle('Choose a new password');
   const { token } = useParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,7 +49,7 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-sm px-4 py-14 sm:py-20">
+    <AuthShell>
       {success ? (
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Password updated</h1>
@@ -112,7 +115,7 @@ const ResetPassword = () => {
           </form>
         </>
       )}
-    </div>
+    </AuthShell>
   );
 };
 

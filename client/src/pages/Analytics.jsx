@@ -5,6 +5,7 @@ import Loading from '../components/Loading';
 import { ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { ChevronLeft } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
+import usePageTitle from '../hooks/usePageTitle';
 
 const CATEGORY_LABELS = {
   food: 'Food',
@@ -31,6 +32,7 @@ const Analytics = () => {
   const [categoryData, setCategoryData] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const { formatCurrency } = useCurrency(groupCurrency || undefined);
+  usePageTitle(groupName ? `Spending in ${groupName}` : 'Spending');
 
   useEffect(() => {
     const fetchAnalytics = async () => {

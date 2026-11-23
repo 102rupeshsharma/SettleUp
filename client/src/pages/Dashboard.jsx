@@ -4,10 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosInstance';
 import CreateGroupModal from '../components/groups/CreateGroupModal';
 import Avatar from '../components/ui/Avatar';
+import usePageTitle from '../hooks/usePageTitle';
 import { Loader2, Plus, ChevronRight } from 'lucide-react';
 import { useCurrency } from '../hooks/useCurrency';
 
 const Dashboard = () => {
+  usePageTitle('Your groups');
   const { user, updateProfile } = useAuth();
   const { formatCurrency, currencyCode } = useCurrency();
   
@@ -142,6 +144,26 @@ const Dashboard = () => {
 
   const firstName = (user?.name || '').trim().split(/\s+/)[0];
 
+  // One-line summary under the greeting. With several currencies the amounts
+  // can't be netted, so it just says how many groups need attention.
+  const unsettledCount = (overview?.groups || []).filter((g) => Math.abs(g.net) > 0.01).length;
+  let overallLine = 'Here is where things stand across your groups.';
+  if (overview && groups.length > 0) {
+    if (unsettledCount === 0) {
+      overallLine = "You're settled up in every group.";
+    } else if (totals.length === 1) {
+      const net = totals[0].owed - totals[0].owing;
+      overallLine =
+        Math.abs(net) <= 0.01
+          ? 'What you owe and what you are owed cancel out overall.'
+          : net > 0
+            ? `Overall you are owed ${formatCurrency(net, totals[0].currency)}.`
+            : `Overall you owe ${formatCurrency(Math.abs(net), totals[0].currency)}.`;
+    } else {
+      overallLine = `${unsettledCount} of your groups ${unsettledCount === 1 ? 'has' : 'have'} an open balance.`;
+    }
+  }
+
   const groupBalanceLabel = (group) => {
     const entry = netByGroup[group._id];
     if (!entry) return null;
@@ -186,29 +208,33 @@ const Dashboard = () => {
       )}
 
       <header>
-        <p className="text-sm text-muted">Hi {firstName || 'there'}</p>
-        <div className="mt-3 grid grid-cols-2 gap-6 sm:max-w-md">
-          <div>
-            <p className="text-sm text-muted">You owe</p>
-            <div className={`mt-1 font-display text-2xl font-semibold tabular-nums sm:text-3xl ${owingParts.length ? 'text-neg' : 'text-ink'}`}>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          Hi {firstName || 'there'}
+        </h1>
+        <p className="mt-1 text-sm text-muted">{overallLine}</p>
+
+        <dl className="panel mt-5 grid grid-cols-2 divide-x divide-line sm:max-w-lg">
+          <div className="px-5 py-4">
+            <dt className="text-sm text-muted">You owe</dt>
+            <dd className={`mt-1 font-display text-2xl font-semibold tabular-nums ${owingParts.length ? 'text-neg' : 'text-ink'}`}>
               {owingParts.length === 0
                 ? zeroAmount
                 : owingParts.map((t) => (
                     <div key={t.currency}>{formatCurrency(t.owing, t.currency)}</div>
                   ))}
-            </div>
+            </dd>
           </div>
-          <div className="border-l border-line pl-6">
-            <p className="text-sm text-muted">You're owed</p>
-            <div className={`mt-1 font-display text-2xl font-semibold tabular-nums sm:text-3xl ${owedParts.length ? 'text-pos' : 'text-ink'}`}>
+          <div className="px-5 py-4">
+            <dt className="text-sm text-muted">You're owed</dt>
+            <dd className={`mt-1 font-display text-2xl font-semibold tabular-nums ${owedParts.length ? 'text-pos' : 'text-ink'}`}>
               {owedParts.length === 0
                 ? zeroAmount
                 : owedParts.map((t) => (
                     <div key={t.currency}>{formatCurrency(t.owed, t.currency)}</div>
                   ))}
-            </div>
+            </dd>
           </div>
-        </div>
+        </dl>
       </header>
 
       <section>
@@ -261,7 +287,25 @@ const Dashboard = () => {
                         {group.description ? ` · ${group.description}` : ''}
                       </p>
                     </div>
-                    <span className="shrink-0 text-right text-sm">{groupBalanceLabel(group)}</span>
+                    <span className="hidden shrink-0 items-center -space-x-1.5 md:flex" aria-hidden="true">
+                      {(group.members || []).slice(0, 4).map((m) =>
+                        m.userId ? (
+                          <Avatar
+                            key={m.userId._id || m.userId}
+                            name={m.userId.name}
+                            src={m.userId.avatar}
+                            size="sm"
+                            className="ring-2 ring-surface"
+                          />
+                        ) : null
+                      )}
+                      {memberCount > 4 && (
+                        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sunken px-1 text-[10px] font-medium text-muted ring-2 ring-surface">
+                          +{memberCount - 4}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-right text-sm sm:w-36">{groupBalanceLabel(group)}</span>
                     <ChevronRight className="h-4 w-4 shrink-0 text-faint" />
                   </Link>
                 </li>

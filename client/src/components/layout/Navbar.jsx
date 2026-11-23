@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../notifications/NotificationBell';
 import ThemeToggle from './ThemeToggle';
@@ -29,12 +29,16 @@ const Navbar = () => {
         <div className="flex items-center gap-1">
           {user ? (
             <>
-              <Link
+              <NavLink
                 to="/dashboard"
-                className="mr-1 hidden rounded-md px-3 py-1.5 text-sm text-muted transition-colors hover:bg-sunken hover:text-ink sm:block"
+                className={({ isActive }) =>
+                  `mr-1 hidden rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-sunken hover:text-ink sm:block ${
+                    isActive ? 'font-medium text-ink' : 'text-muted'
+                  }`
+                }
               >
                 Groups
-              </Link>
+              </NavLink>
               <NotificationBell />
               <ThemeToggle />
               <div className="ml-2 flex items-center gap-2 border-l border-line pl-3">
